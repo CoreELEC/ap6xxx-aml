@@ -681,6 +681,11 @@ pktq_mdeq(struct pktq *pq, uint prec_bmp, int *prec_out)
 
 	q->len--;
 
+	if (q->len == 0) {
+	        q->head = NULL;
+	        q->tail = NULL;
+	}
+        
 	if (prec_out)
 		*prec_out = prec;
 
