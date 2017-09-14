@@ -84,6 +84,7 @@ uint config_msg_level = CONFIG_ERROR_LEVEL;
 #define FW_BCM43012B0 "fw_bcm43012b0"
 #define FW_BCM43341B1 "fw_bcm43341b0_ag"
 #define FW_BCM43241B4 "fw_bcm43241b4_ag"
+#define FW_BCM4335B0 "fw_bcm4335b0_ag"
 #define FW_BCM4339A0 "fw_bcm4339a0_ag"
 #define FW_BCM43455C0 "fw_bcm43455c0_ag"
 #define FW_BCM43456C5 "fw_bcm43456c5_ag"
@@ -446,6 +447,8 @@ dhd_conf_set_fw_name_by_chip(dhd_pub_t *dhd, char *fw_path)
 		case BCM4335_CHIP_ID:
 			if (chiprev == BCM4335A0_CHIP_REV)
 				strcpy(&fw_path[i+1], FW_BCM4339A0);
+			else if (chiprev == BCM4335B0_CHIP_REV)
+				strcpy(&fw_path[i+1], FW_BCM4335B0);
 			break;
 		case BCM4339_CHIP_ID:
 			if (chiprev == BCM4339A0_CHIP_REV)

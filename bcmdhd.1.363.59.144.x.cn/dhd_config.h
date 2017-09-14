@@ -29,6 +29,7 @@ extern uint dhd_slpauto;
 #define BCM43341B0_CHIP_REV     2
 #define BCM43241B4_CHIP_REV     5
 #define BCM4335A0_CHIP_REV      2
+#define BCM4335B0_CHIP_REV      1
 #define BCM4339A0_CHIP_REV      1
 #define BCM43455C0_CHIP_REV     6
 #define BCM43456C5_CHIP_REV     9
