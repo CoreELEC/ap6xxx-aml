@@ -6167,9 +6167,18 @@ dhd_open(struct net_device *net)
 	wifi_adapter_info_t *adapter = NULL;
 #endif
 
-	if (!dhd_download_fw_on_driverload && !dhd_driver_init_done) {
-		DHD_ERROR(("%s: WLAN driver is not initialized\n", __FUNCTION__));
-		return -1;
+	int retry;
+	for (retry = 0; ++retry; ) {
+		if (!dhd_download_fw_on_driverload && !dhd_driver_init_done) {
+			DHD_ERROR(("%s: WLAN driver is not initialized\n", __FUNCTION__));
+			if (retry > 3) {
+				return -1;
+			} else {
+				OSL_SLEEP(1000);
+			}
+		} else {
+			break;
+		}
 	}
 
 	printf("%s: Enter %p\n", __FUNCTION__, net);
