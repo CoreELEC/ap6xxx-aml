@@ -9179,6 +9179,7 @@ dhd_open(struct net_device *net)
 	int bytes_written = 0;
 #endif
 	int retry = POWERUP_MAX_RETRY;
+	int retry_init;
 
 #if defined(PREVENT_REOPEN_DURING_HANG)
 	/* WAR : to prevent calling dhd_open abnormally in quick succession after hang event */
@@ -9225,10 +9226,18 @@ dhd_open(struct net_device *net)
 			dhd->wl_accel_force_reg_on = TRUE;
 		}
 #endif /* WLAN_ACCEL_BOOT */
-		if (!dhd_driver_init_done) {
-			DHD_ERROR(("%s: WLAN driver is not initialized\n", __FUNCTION__));
-			mutex_unlock(&dhd->pub.ndev_op_sync);
-			return -1;
+		for (retry_init = 0; ++retry_init; ) {
+			if (!dhd_download_fw_on_driverload && !dhd_driver_init_done) {
+				DHD_ERROR(("%s: WLAN driver is not initialized\n", __FUNCTION__));
+				if (retry_init > 3) {
+					mutex_unlock(&dhd->pub.ndev_op_sync);
+					return -1;
+				} else {
+					OSL_SLEEP(1000);
+				}
+			} else {
+				break;
+			}
 		}
 	}
 
