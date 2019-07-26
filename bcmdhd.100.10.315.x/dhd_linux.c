@@ -11482,296 +11482,21 @@ exit:
 #endif // endif
 
 int
-dhd_preinit_ioctls(dhd_pub_t *dhd)
+dhd_preinit_op_mode(dhd_pub_t *dhd)
 {
 	int ret = 0;
-	char eventmask[WL_EVENTING_MASK_LEN];
-	char iovbuf[WL_EVENTING_MASK_LEN + 12];	/*  Room for "event_msgs" + '\0' + bitvec  */
-	uint32 buf_key_b4_m4 = 1;
-	uint8 msglen;
-	eventmsgs_ext_t *eventmask_msg = NULL;
-	char* iov_buf = NULL;
-	int ret2 = 0;
-	uint32 wnm_cap = 0;
-#if defined(BCMSUP_4WAY_HANDSHAKE)
-	uint32 sup_wpa = 1;
-#endif /* BCMSUP_4WAY_HANDSHAKE */
-#if defined(CUSTOM_AMPDU_BA_WSIZE)
-	uint32 ampdu_ba_wsize = 0;
-#endif // endif
-#if defined(CUSTOM_AMPDU_MPDU)
-	int32 ampdu_mpdu = 0;
-#endif // endif
-#if defined(CUSTOM_AMPDU_RELEASE)
-	int32 ampdu_release = 0;
-#endif // endif
-#if defined(CUSTOM_AMSDU_AGGSF)
-	int32 amsdu_aggsf = 0;
-#endif // endif
-
-#if defined(BCMSDIO) || defined(BCMDBUS)
-#ifdef PROP_TXSTATUS
-	int wlfc_enable = TRUE;
-#ifndef DISABLE_11N
-	uint32 hostreorder = 1;
-	uint wl_down = 1;
-#endif /* DISABLE_11N */
-#endif /* PROP_TXSTATUS */
-#endif /* BCMSDIO || BCMDBUS */
-#ifndef PCIE_FULL_DONGLE
-	uint32 wl_ap_isolate;
-#endif /* PCIE_FULL_DONGLE */
-	uint32 frameburst = CUSTOM_FRAMEBURST_SET;
-	uint wnm_bsstrans_resp = 0;
-#ifdef SUPPORT_SET_CAC
-	uint32 cac = 1;
-#endif /* SUPPORT_SET_CAC */
-
-#if defined(DHD_NON_DMA_M2M_CORRUPTION)
-	dhd_pcie_dmaxfer_lpbk_t pcie_dmaxfer_lpbk;
-#endif /* DHD_NON_DMA_M2M_CORRUPTION */
-
-#ifdef DHD_ENABLE_LPC
-	uint32 lpc = 1;
-#endif /* DHD_ENABLE_LPC */
-	uint power_mode = PM_FAST;
-#if defined(BCMSDIO)
-	uint32 dongle_align = DHD_SDALIGN;
-	uint32 glom = CUSTOM_GLOM_SETTING;
-#endif /* defined(BCMSDIO) */
-#if defined(USE_WL_CREDALL)
-	uint32 credall = 1;
-#endif // endif
-	uint bcn_timeout = CUSTOM_BCN_TIMEOUT;
-	uint scancache_enab = TRUE;
-#ifdef ENABLE_BCN_LI_BCN_WAKEUP
-	uint32 bcn_li_bcn = 1;
-#endif /* ENABLE_BCN_LI_BCN_WAKEUP */
-	uint retry_max = CUSTOM_ASSOC_RETRY_MAX;
 #if defined(ARP_OFFLOAD_SUPPORT)
 	int arpoe = 1;
-#endif // endif
-	int scan_assoc_time = DHD_SCAN_ASSOC_ACTIVE_TIME;
-	int scan_unassoc_time = DHD_SCAN_UNASSOC_ACTIVE_TIME;
-	int scan_passive_time = DHD_SCAN_PASSIVE_TIME;
-	char buf[WLC_IOCTL_SMLEN];
-	char *ptr;
-	uint32 listen_interval = CUSTOM_LISTEN_INTERVAL; /* Default Listen Interval in Beacons */
-#if defined(DHD_8021X_DUMP) && defined(SHOW_LOGTRACE)
-	wl_el_tag_params_t *el_tag = NULL;
-#endif /* DHD_8021X_DUMP */
-#ifdef ROAM_ENABLE
-	uint roamvar = 0;
-	int roam_trigger[2] = {CUSTOM_ROAM_TRIGGER_SETTING, WLC_BAND_ALL};
-	int roam_scan_period[2] = {10, WLC_BAND_ALL};
-	int roam_delta[2] = {CUSTOM_ROAM_DELTA_SETTING, WLC_BAND_ALL};
-#ifdef ROAM_AP_ENV_DETECTION
-	int roam_env_mode = AP_ENV_INDETERMINATE;
-#endif /* ROAM_AP_ENV_DETECTION */
-#ifdef FULL_ROAMING_SCAN_PERIOD_60_SEC
-	int roam_fullscan_period = 60;
-#else /* FULL_ROAMING_SCAN_PERIOD_60_SEC */
-	int roam_fullscan_period = 120;
-#endif /* FULL_ROAMING_SCAN_PERIOD_60_SEC */
-#ifdef DISABLE_BCNLOSS_ROAM
-	uint roam_bcnloss_off = 1;
-#endif /* DISABLE_BCNLOSS_ROAM */
-#else
-#ifdef DISABLE_BUILTIN_ROAM
-	uint roamvar = 1;
-#endif /* DISABLE_BUILTIN_ROAM */
-#endif /* ROAM_ENABLE */
-
-#if defined(SOFTAP)
-	uint dtim = 1;
 #endif // endif
 #if (defined(AP) && !defined(WLP2P)) || (!defined(AP) && defined(WL_CFG80211))
 	struct ether_addr p2p_ea;
 #endif // endif
-#ifdef BCMCCX
-	uint32 ccx = 1;
-#endif // endif
-#ifdef SOFTAP_UAPSD_OFF
-	uint32 wme_apsd = 0;
-#endif /* SOFTAP_UAPSD_OFF */
 #if (defined(AP) || defined(WLP2P)) && !defined(SOFTAP_AND_GC)
 	uint32 apsta = 1; /* Enable APSTA mode */
 #elif defined(SOFTAP_AND_GC)
 	uint32 apsta = 0;
 	int ap_mode = 1;
 #endif /* (defined(AP) || defined(WLP2P)) && !defined(SOFTAP_AND_GC) */
-#ifdef GET_CUSTOM_MAC_ENABLE
-	struct ether_addr ea_addr;
-	char hw_ether[62];
-#endif /* GET_CUSTOM_MAC_ENABLE */
-#ifdef OKC_SUPPORT
-	uint32 okc = 1;
-#endif // endif
-
-#ifdef DISABLE_11N
-	uint32 nmode = 0;
-#endif /* DISABLE_11N */
-
-#ifdef USE_WL_TXBF
-	uint32 txbf = 1;
-#endif /* USE_WL_TXBF */
-#ifdef DISABLE_TXBFR
-	uint32 txbf_bfr_cap = 0;
-#endif /* DISABLE_TXBFR */
-#ifdef AMPDU_VO_ENABLE
-	struct ampdu_tid_control tid;
-#endif // endif
-#if defined(PROP_TXSTATUS)
-#ifdef USE_WFA_CERT_CONF
-	uint32 proptx = 0;
-#endif /* USE_WFA_CERT_CONF */
-#endif /* PROP_TXSTATUS */
-#ifdef DHD_SET_FW_HIGHSPEED
-	uint32 ack_ratio = 250;
-	uint32 ack_ratio_depth = 64;
-#endif /* DHD_SET_FW_HIGHSPEED */
-#if defined(SUPPORT_2G_VHT) || defined(SUPPORT_5G_1024QAM_VHT)
-	uint32 vht_features = 0; /* init to 0, will be set based on each support */
-#endif /* SUPPORT_2G_VHT || SUPPORT_5G_1024QAM_VHT */
-#ifdef DISABLE_11N_PROPRIETARY_RATES
-	uint32 ht_features = 0;
-#endif /* DISABLE_11N_PROPRIETARY_RATES */
-#ifdef CUSTOM_PSPRETEND_THR
-	uint32 pspretend_thr = CUSTOM_PSPRETEND_THR;
-#endif // endif
-#ifdef CUSTOM_EVENT_PM_WAKE
-	uint32 pm_awake_thresh = CUSTOM_EVENT_PM_WAKE;
-#endif	/* CUSTOM_EVENT_PM_WAKE */
-#ifdef DISABLE_PRUNED_SCAN
-	uint32 scan_features = 0;
-#endif /* DISABLE_PRUNED_SCAN */
-#ifdef BCMPCIE_OOB_HOST_WAKE
-	uint32 hostwake_oob = 0;
-#endif /* BCMPCIE_OOB_HOST_WAKE */
-
-#ifdef PKT_FILTER_SUPPORT
-	dhd_pkt_filter_enable = TRUE;
-#ifdef APF
-	dhd->apf_set = FALSE;
-#endif /* APF */
-#endif /* PKT_FILTER_SUPPORT */
-#ifdef WLTDLS
-	dhd->tdls_enable = FALSE;
-	dhd_tdls_set_mode(dhd, false);
-#endif /* WLTDLS */
-	dhd->suspend_bcn_li_dtim = CUSTOM_SUSPEND_BCN_LI_DTIM;
-#ifdef ENABLE_MAX_DTIM_IN_SUSPEND
-	dhd->max_dtim_enable = TRUE;
-#else
-	dhd->max_dtim_enable = FALSE;
-#endif /* ENABLE_MAX_DTIM_IN_SUSPEND */
-	DHD_TRACE(("Enter %s\n", __FUNCTION__));
-
-#ifdef DHDTCPACK_SUPPRESS
-	dhd_tcpack_suppress_set(dhd, dhd->conf->tcpack_sup_mode);
-#endif
-	dhd->op_mode = 0;
-
-#if defined(CUSTOM_COUNTRY_CODE)
-	/* clear AP flags */
-	dhd->dhd_cflags &= ~WLAN_PLAT_AP_FLAG;
-#endif /* CUSTOM_COUNTRY_CODE && (CUSTOMER_HW2 || BOARD_HIKEY) */
-
-	if ((!op_mode && dhd_get_fw_mode(dhd->info) == DHD_FLAG_MFG_MODE) ||
-		(op_mode == DHD_FLAG_MFG_MODE)) {
-		dhd->op_mode = DHD_FLAG_MFG_MODE;
-#ifdef DHD_PCIE_NATIVE_RUNTIMEPM
-		/* disable runtimePM by default in MFG mode. */
-		pm_runtime_disable(dhd_bus_to_dev(dhd->bus));
-#endif /* DHD_PCIE_NATIVE_RUNTIMEPM */
-		/* Check and adjust IOCTL response timeout for Manufactring firmware */
-		dhd_os_set_ioctl_resp_timeout(MFG_IOCTL_RESP_TIMEOUT);
-		DHD_ERROR(("%s : Set IOCTL response time for Manufactring Firmware\n",
-			__FUNCTION__));
-	} else {
-		dhd_os_set_ioctl_resp_timeout(IOCTL_RESP_TIMEOUT);
-		DHD_INFO(("%s : Set IOCTL response time.\n", __FUNCTION__));
-	}
-#ifdef BCMPCIE_OOB_HOST_WAKE
-	ret = dhd_iovar(dhd, 0, "bus:hostwake_oob", NULL, 0, (char *)&hostwake_oob,
-		sizeof(hostwake_oob), FALSE);
-	if (ret < 0) {
-		DHD_ERROR(("%s: hostwake_oob IOVAR not present, proceed\n", __FUNCTION__));
-	} else {
-		if (hostwake_oob == 0) {
-			DHD_ERROR(("%s: hostwake_oob is not enabled in the NVRAM, STOP\n",
-				__FUNCTION__));
-			ret = BCME_UNSUPPORTED;
-			goto done;
-		} else {
-			DHD_ERROR(("%s: hostwake_oob enabled\n", __FUNCTION__));
-		}
-	}
-#endif /* BCMPCIE_OOB_HOST_WAKE */
-#ifdef GET_CUSTOM_MAC_ENABLE
-	ret = wifi_platform_get_mac_addr(dhd->info->adapter, hw_ether);
-	if (!ret) {
-		memset(buf, 0, sizeof(buf));
-		bcopy(hw_ether, ea_addr.octet, sizeof(struct ether_addr));
-		bcm_mkiovar("cur_etheraddr", (void *)&ea_addr, ETHER_ADDR_LEN, buf, sizeof(buf));
-		ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, buf, sizeof(buf), TRUE, 0);
-		if (ret < 0) {
-			memset(buf, 0, sizeof(buf));
-			bcm_mkiovar("hw_ether", hw_ether, sizeof(hw_ether), buf, sizeof(buf));
-			ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, buf, sizeof(buf), TRUE, 0);
-			if (ret) {
-				int i;
-				DHD_ERROR(("%s: can't set MAC address MAC="MACDBG", error=%d\n",
-					__FUNCTION__, MAC2STRDBG(hw_ether), ret));
-				for (i=0; i<sizeof(hw_ether)-ETHER_ADDR_LEN; i++) {
-					printf("0x%02x,", hw_ether[i+ETHER_ADDR_LEN]);
-					if ((i+1)%8 == 0)
-						printf("\n");
-				}
-				ret = BCME_NOTUP;
-				goto done;
-			}
-		}
-	} else {
-		DHD_ERROR(("%s: can't get custom MAC address, ret=%d\n", __FUNCTION__, ret));
-		ret = BCME_NOTUP;
-		goto done;
-	}
-#endif /* GET_CUSTOM_MAC_ENABLE */
-	/* Get the default device MAC address directly from firmware */
-	memset(buf, 0, sizeof(buf));
-	bcm_mkiovar("cur_etheraddr", 0, 0, buf, sizeof(buf));
-	if ((ret = dhd_wl_ioctl_cmd(dhd, WLC_GET_VAR, buf, sizeof(buf),
-		FALSE, 0)) < 0) {
-		DHD_ERROR(("%s: can't get MAC address , error=%d\n", __FUNCTION__, ret));
-		ret = BCME_NOTUP;
-		goto done;
-	}
-	/* Update public MAC address after reading from Firmware */
-	memcpy(dhd->mac.octet, buf, ETHER_ADDR_LEN);
-
-	if ((ret = dhd_apply_default_clm(dhd, dhd->clm_path)) < 0) {
-		DHD_ERROR(("%s: CLM set failed. Abort initialization.\n", __FUNCTION__));
-		goto done;
-	}
-
-	/* get a capabilities from firmware */
-	{
-		uint32 cap_buf_size = sizeof(dhd->fw_capabilities);
-		memset(dhd->fw_capabilities, 0, cap_buf_size);
-		ret = dhd_iovar(dhd, 0, "cap", NULL, 0, dhd->fw_capabilities, (cap_buf_size - 1),
-				FALSE);
-		if (ret < 0) {
-			DHD_ERROR(("%s: Get Capability failed (error=%d)\n",
-				__FUNCTION__, ret));
-			return 0;
-		}
-
-		memmove(&dhd->fw_capabilities[1], dhd->fw_capabilities, (cap_buf_size - 1));
-		dhd->fw_capabilities[0] = ' ';
-		dhd->fw_capabilities[cap_buf_size - 2] = ' ';
-		dhd->fw_capabilities[cap_buf_size - 1] = '\0';
-	}
 
 	if ((!op_mode && dhd_get_fw_mode(dhd->info) == DHD_FLAG_HOSTAP_MODE) ||
 		(op_mode == DHD_FLAG_HOSTAP_MODE)) {
@@ -11892,6 +11617,730 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	(void)concurrent_mode;
 #endif // endif
 	}
+
+#if defined(AP) && !defined(WLP2P)
+	ret = dhd_iovar(dhd, 0, "apsta", (char *)&apsta, sizeof(apsta), NULL, 0, TRUE);
+#endif /* defined(AP) && !defined(WLP2P) */
+
+#ifdef ARP_OFFLOAD_SUPPORT
+	/* Set and enable ARP offload feature for STA only  */
+#if defined(SOFTAP)
+	if (arpoe && !ap_fw_loaded)
+#else
+	if (arpoe)
+#endif // endif
+	{
+		dhd_arp_offload_enable(dhd, TRUE);
+		dhd_arp_offload_set(dhd, dhd_arp_mode);
+	} else {
+		dhd_arp_offload_enable(dhd, FALSE);
+		dhd_arp_offload_set(dhd, 0);
+	}
+	dhd_arp_enable = arpoe;
+#endif /* ARP_OFFLOAD_SUPPORT */
+
+	return ret;
+}
+
+int
+dhd_preinit_proptx(dhd_pub_t *dhd)
+{
+	int ret = 0;
+	int ret2 = 0;
+#if defined(BCMSDIO) || defined(BCMDBUS)
+#ifdef PROP_TXSTATUS
+	int wlfc_enable = TRUE;
+#ifndef DISABLE_11N
+	uint32 hostreorder = 1;
+	uint wl_down = 1;
+#endif /* DISABLE_11N */
+#endif /* PROP_TXSTATUS */
+#endif /* BCMSDIO || BCMDBUS */
+#if defined(PROP_TXSTATUS)
+#ifdef USE_WFA_CERT_CONF
+	uint32 proptx = 0;
+#endif /* USE_WFA_CERT_CONF */
+#endif /* PROP_TXSTATUS */
+
+#if defined(BCMSDIO) || defined(BCMDBUS)
+#ifdef PROP_TXSTATUS
+	if (disable_proptx ||
+#ifdef PROP_TXSTATUS_VSDB
+		/* enable WLFC only if the firmware is VSDB when it is in STA mode */
+		(dhd->op_mode != DHD_FLAG_HOSTAP_MODE &&
+		 dhd->op_mode != DHD_FLAG_IBSS_MODE) ||
+#endif /* PROP_TXSTATUS_VSDB */
+		FALSE) {
+		wlfc_enable = FALSE;
+	}
+	ret = dhd_conf_get_disable_proptx(dhd);
+	if (ret == 0){
+		disable_proptx = 0;
+		wlfc_enable = TRUE;
+	} else if (ret >= 1) {
+		disable_proptx = 1;
+		wlfc_enable = FALSE;
+		/* terence 20161229: we should set ampdu_hostreorder=0 when disable_proptx=1 */
+		hostreorder = 0;
+	}
+
+#if defined(PROP_TXSTATUS)
+#ifdef USE_WFA_CERT_CONF
+	if (sec_get_param_wfa_cert(dhd, SET_PARAM_PROPTX, &proptx) == BCME_OK) {
+		DHD_ERROR(("%s , read proptx param=%d\n", __FUNCTION__, proptx));
+		wlfc_enable = proptx;
+	}
+#endif /* USE_WFA_CERT_CONF */
+#endif /* PROP_TXSTATUS */
+
+#ifndef DISABLE_11N
+	ret = dhd_wl_ioctl_cmd(dhd, WLC_DOWN, (char *)&wl_down, sizeof(wl_down), TRUE, 0);
+	ret2 = dhd_iovar(dhd, 0, "ampdu_hostreorder", (char *)&hostreorder, sizeof(hostreorder),
+			NULL, 0, TRUE);
+	if (ret2 < 0) {
+		DHD_ERROR(("%s wl ampdu_hostreorder failed %d\n", __FUNCTION__, ret2));
+		if (ret2 != BCME_UNSUPPORTED)
+			ret = ret2;
+
+		if (ret == BCME_NOTDOWN) {
+			uint wl_down = 1;
+			ret2 = dhd_wl_ioctl_cmd(dhd, WLC_DOWN, (char *)&wl_down,
+				sizeof(wl_down), TRUE, 0);
+			DHD_ERROR(("%s ampdu_hostreorder fail WL_DOWN : %d, hostreorder :%d\n",
+				__FUNCTION__, ret2, hostreorder));
+
+			ret2 = dhd_iovar(dhd, 0, "ampdu_hostreorder", (char *)&hostreorder,
+					sizeof(hostreorder), NULL, 0, TRUE);
+			DHD_ERROR(("%s wl ampdu_hostreorder. ret --> %d\n", __FUNCTION__, ret2));
+			if (ret2 != BCME_UNSUPPORTED)
+					ret = ret2;
+		}
+		if (ret2 != BCME_OK)
+			hostreorder = 0;
+	}
+#endif /* DISABLE_11N */
+
+	if (wlfc_enable) {
+		dhd_wlfc_init(dhd);
+		/* terence 20161229: enable ampdu_hostreorder if tlv enabled */
+		dhd_conf_set_intiovar(dhd, WLC_SET_VAR, "ampdu_hostreorder", 1, 0, TRUE);
+	}
+#ifndef DISABLE_11N
+	else if (hostreorder)
+		dhd_wlfc_hostreorder_init(dhd);
+#endif /* DISABLE_11N */
+#else
+	/* terence 20161229: disable ampdu_hostreorder if PROP_TXSTATUS not defined */
+	printf("%s: not define PROP_TXSTATUS\n", __FUNCTION__);
+	dhd_conf_set_intiovar(dhd, WLC_SET_VAR, "ampdu_hostreorder", 0, 0, TRUE);
+#endif /* PROP_TXSTATUS */
+#endif /* BCMSDIO || BCMDBUS */
+
+	return ret;
+}
+
+#ifdef PKT_FILTER_SUPPORT
+int
+dhd_preinit_pkt_filter(dhd_pub_t *dhd)
+{
+	/* Setup default defintions for pktfilter , enable in suspend */
+	if (dhd_master_mode) {
+		dhd->pktfilter_count = 6;
+		dhd->pktfilter[DHD_BROADCAST_FILTER_NUM] = NULL;
+		if (!FW_SUPPORTED(dhd, pf6)) {
+			dhd->pktfilter[DHD_MULTICAST4_FILTER_NUM] = NULL;
+			dhd->pktfilter[DHD_MULTICAST6_FILTER_NUM] = NULL;
+		} else {
+			/* Immediately pkt filter TYPE 6 Discard IPv4/IPv6 Multicast Packet */
+			dhd->pktfilter[DHD_MULTICAST4_FILTER_NUM] = DISCARD_IPV4_MCAST;
+			dhd->pktfilter[DHD_MULTICAST6_FILTER_NUM] = DISCARD_IPV6_MCAST;
+		}
+		/* apply APP pktfilter */
+		dhd->pktfilter[DHD_ARP_FILTER_NUM] = "105 0 0 12 0xFFFF 0x0806";
+
+#ifdef BLOCK_IPV6_PACKET
+		/* Setup filter to allow only IPv4 unicast frames */
+		dhd->pktfilter[DHD_UNICAST_FILTER_NUM] = "100 0 0 0 "
+			HEX_PREF_STR UNI_FILTER_STR ZERO_ADDR_STR ETHER_TYPE_STR IPV6_FILTER_STR
+			" "
+			HEX_PREF_STR ZERO_ADDR_STR ZERO_ADDR_STR ETHER_TYPE_STR ZERO_TYPE_STR;
+#else
+		/* Setup filter to allow only unicast */
+		dhd->pktfilter[DHD_UNICAST_FILTER_NUM] = "100 0 0 0 0x01 0x00";
+#endif /* BLOCK_IPV6_PACKET */
+
+#ifdef PASS_IPV4_SUSPEND
+		dhd->pktfilter[DHD_MDNS_FILTER_NUM] = "104 0 0 0 0xFFFFFF 0x01005E";
+#else
+		/* Add filter to pass multicastDNS packet and NOT filter out as Broadcast */
+		dhd->pktfilter[DHD_MDNS_FILTER_NUM] = NULL;
+#endif /* PASS_IPV4_SUSPEND */
+		if (FW_SUPPORTED(dhd, pf6)) {
+			/* Immediately pkt filter TYPE 6 Dicard Broadcast IP packet */
+			dhd->pktfilter[DHD_IP4BCAST_DROP_FILTER_NUM] = DISCARD_IPV4_BCAST;
+			/* Immediately pkt filter TYPE 6 Dicard Cisco STP packet */
+			dhd->pktfilter[DHD_LLC_STP_DROP_FILTER_NUM] = DISCARD_LLC_STP;
+			/* Immediately pkt filter TYPE 6 Dicard Cisco XID protocol */
+			dhd->pktfilter[DHD_LLC_XID_DROP_FILTER_NUM] = DISCARD_LLC_XID;
+			dhd->pktfilter_count = 10;
+		}
+
+#ifdef GAN_LITE_NAT_KEEPALIVE_FILTER
+		dhd->pktfilter_count = 4;
+		/* Setup filter to block broadcast and NAT Keepalive packets */
+		/* discard all broadcast packets */
+		dhd->pktfilter[DHD_UNICAST_FILTER_NUM] = "100 0 0 0 0xffffff 0xffffff";
+		/* discard NAT Keepalive packets */
+		dhd->pktfilter[DHD_BROADCAST_FILTER_NUM] = "102 0 0 36 0xffffffff 0x11940009";
+		/* discard NAT Keepalive packets */
+		dhd->pktfilter[DHD_MULTICAST4_FILTER_NUM] = "104 0 0 38 0xffffffff 0x11940009";
+		dhd->pktfilter[DHD_MULTICAST6_FILTER_NUM] = NULL;
+#endif /* GAN_LITE_NAT_KEEPALIVE_FILTER */
+	} else
+		dhd_conf_discard_pkt_filter(dhd);
+	dhd_conf_add_pkt_filter(dhd);
+	
+#if defined(SOFTAP)
+	if (ap_fw_loaded) {
+		dhd_enable_packet_filter(0, dhd);
+	}
+#endif /* defined(SOFTAP) */
+	dhd_set_packet_filter(dhd);
+
+	return 0;
+}
+#endif /* PKT_FILTER_SUPPORT */
+
+int
+dhd_preinit_eventmask(dhd_pub_t *dhd)
+{
+	int ret = 0;
+	char eventmask[WL_EVENTING_MASK_LEN];
+	char iovbuf[WL_EVENTING_MASK_LEN + 12];	/*  Room for "event_msgs" + '\0' + bitvec  */
+	uint8 msglen;
+	eventmsgs_ext_t *eventmask_msg = NULL;
+	char* iov_buf = NULL;
+	int ret2 = 0;
+
+	DHD_TRACE(("Enter %s\n", __FUNCTION__));
+
+	iov_buf = (char*)MALLOC(dhd->osh, WLC_IOCTL_SMLEN);
+	if (iov_buf == NULL) {
+		DHD_ERROR(("failed to allocate %d bytes for iov_buf\n", WLC_IOCTL_SMLEN));
+		ret = BCME_NOMEM;
+		goto done;
+	}
+
+	/* Read event_msgs mask */
+	ret = dhd_iovar(dhd, 0, "event_msgs", eventmask, WL_EVENTING_MASK_LEN, iovbuf,
+			sizeof(iovbuf), FALSE);
+	if (ret < 0) {
+		DHD_ERROR(("%s read Event mask failed %d\n", __FUNCTION__, ret));
+		goto done;
+	}
+	bcopy(iovbuf, eventmask, WL_EVENTING_MASK_LEN);
+
+	/* Setup event_msgs */
+	setbit(eventmask, WLC_E_SET_SSID);
+	setbit(eventmask, WLC_E_PRUNE);
+	setbit(eventmask, WLC_E_AUTH);
+	setbit(eventmask, WLC_E_AUTH_IND);
+	setbit(eventmask, WLC_E_ASSOC);
+	setbit(eventmask, WLC_E_REASSOC);
+	setbit(eventmask, WLC_E_REASSOC_IND);
+	if (!(dhd->op_mode & DHD_FLAG_IBSS_MODE))
+		setbit(eventmask, WLC_E_DEAUTH);
+	setbit(eventmask, WLC_E_DEAUTH_IND);
+	setbit(eventmask, WLC_E_DISASSOC_IND);
+	setbit(eventmask, WLC_E_DISASSOC);
+	setbit(eventmask, WLC_E_JOIN);
+	setbit(eventmask, WLC_E_START);
+	setbit(eventmask, WLC_E_ASSOC_IND);
+	setbit(eventmask, WLC_E_PSK_SUP);
+	setbit(eventmask, WLC_E_LINK);
+	setbit(eventmask, WLC_E_MIC_ERROR);
+	setbit(eventmask, WLC_E_ASSOC_REQ_IE);
+	setbit(eventmask, WLC_E_ASSOC_RESP_IE);
+#ifdef LIMIT_BORROW
+	setbit(eventmask, WLC_E_ALLOW_CREDIT_BORROW);
+#endif // endif
+#ifndef WL_CFG80211
+	setbit(eventmask, WLC_E_PMKID_CACHE);
+//	setbit(eventmask, WLC_E_TXFAIL); // terence 20181106: remove unnecessary event
+#endif // endif
+	setbit(eventmask, WLC_E_JOIN_START);
+//	setbit(eventmask, WLC_E_SCAN_COMPLETE); // terence 20150628: remove redundant event
+#ifdef DHD_DEBUG
+	setbit(eventmask, WLC_E_SCAN_CONFIRM_IND);
+#endif // endif
+#ifdef PNO_SUPPORT
+	setbit(eventmask, WLC_E_PFN_NET_FOUND);
+	setbit(eventmask, WLC_E_PFN_BEST_BATCHING);
+	setbit(eventmask, WLC_E_PFN_BSSID_NET_FOUND);
+	setbit(eventmask, WLC_E_PFN_BSSID_NET_LOST);
+#endif /* PNO_SUPPORT */
+	/* enable dongle roaming event */
+#ifdef WL_CFG80211
+	setbit(eventmask, WLC_E_ROAM);
+	setbit(eventmask, WLC_E_BSSID);
+#endif /* WL_CFG80211 */
+#ifdef BCMCCX
+	setbit(eventmask, WLC_E_ADDTS_IND);
+	setbit(eventmask, WLC_E_DELTS_IND);
+#endif /* BCMCCX */
+#ifdef WLTDLS
+	setbit(eventmask, WLC_E_TDLS_PEER_EVENT);
+#endif /* WLTDLS */
+#ifdef WL_ESCAN
+	setbit(eventmask, WLC_E_ESCAN_RESULT);
+#endif /* WL_ESCAN */
+#ifdef RTT_SUPPORT
+	setbit(eventmask, WLC_E_PROXD);
+#endif /* RTT_SUPPORT */
+#ifdef WL_CFG80211
+	setbit(eventmask, WLC_E_ESCAN_RESULT);
+	setbit(eventmask, WLC_E_AP_STARTED);
+	setbit(eventmask, WLC_E_ACTION_FRAME_RX);
+	if (dhd->op_mode & DHD_FLAG_P2P_MODE) {
+		setbit(eventmask, WLC_E_P2P_DISC_LISTEN_COMPLETE);
+	}
+#endif /* WL_CFG80211 */
+
+#if defined(SHOW_LOGTRACE) && defined(LOGTRACE_FROM_FILE)
+	if (dhd_logtrace_from_file(dhd)) {
+		setbit(eventmask, WLC_E_TRACE);
+	} else {
+		clrbit(eventmask, WLC_E_TRACE);
+	}
+#elif defined(SHOW_LOGTRACE)
+	setbit(eventmask, WLC_E_TRACE);
+#else
+	clrbit(eventmask, WLC_E_TRACE);
+#endif /* defined(SHOW_LOGTRACE) && defined(LOGTRACE_FROM_FILE) */
+
+	setbit(eventmask, WLC_E_CSA_COMPLETE_IND);
+#ifdef CUSTOM_EVENT_PM_WAKE
+	setbit(eventmask, WLC_E_EXCESS_PM_WAKE_EVENT);
+#endif	/* CUSTOM_EVENT_PM_WAKE */
+#ifdef DHD_LOSSLESS_ROAMING
+	setbit(eventmask, WLC_E_ROAM_PREP);
+#endif // endif
+	/* nan events */
+	setbit(eventmask, WLC_E_NAN);
+
+	/* Write updated Event mask */
+	ret = dhd_iovar(dhd, 0, "event_msgs", eventmask, WL_EVENTING_MASK_LEN, NULL, 0, TRUE);
+	if (ret < 0) {
+		DHD_ERROR(("%s Set Event mask failed %d\n", __FUNCTION__, ret));
+		goto done;
+	}
+
+	/* make up event mask ext message iovar for event larger than 128 */
+	msglen = ROUNDUP(WLC_E_LAST, NBBY)/NBBY + EVENTMSGS_EXT_STRUCT_SIZE;
+	eventmask_msg = (eventmsgs_ext_t*)MALLOC(dhd->osh, msglen);
+	if (eventmask_msg == NULL) {
+		DHD_ERROR(("failed to allocate %d bytes for event_msg_ext\n", msglen));
+		ret = BCME_NOMEM;
+		goto done;
+	}
+	bzero(eventmask_msg, msglen);
+	eventmask_msg->ver = EVENTMSGS_VER;
+	eventmask_msg->len = ROUNDUP(WLC_E_LAST, NBBY)/NBBY;
+
+	/* Read event_msgs_ext mask */
+	ret2 = dhd_iovar(dhd, 0, "event_msgs_ext", (char *)eventmask_msg, msglen, iov_buf,
+			WLC_IOCTL_SMLEN, FALSE);
+
+	if (ret2 == 0) { /* event_msgs_ext must be supported */
+		bcopy(iov_buf, eventmask_msg, msglen);
+#ifdef RSSI_MONITOR_SUPPORT
+		setbit(eventmask_msg->mask, WLC_E_RSSI_LQM);
+#endif /* RSSI_MONITOR_SUPPORT */
+#ifdef GSCAN_SUPPORT
+		setbit(eventmask_msg->mask, WLC_E_PFN_GSCAN_FULL_RESULT);
+		setbit(eventmask_msg->mask, WLC_E_PFN_SCAN_COMPLETE);
+		setbit(eventmask_msg->mask, WLC_E_PFN_SSID_EXT);
+		setbit(eventmask_msg->mask, WLC_E_ROAM_EXP_EVENT);
+#endif /* GSCAN_SUPPORT */
+		setbit(eventmask_msg->mask, WLC_E_RSSI_LQM);
+#ifdef BT_WIFI_HANDOVER
+		setbit(eventmask_msg->mask, WLC_E_BT_WIFI_HANDOVER_REQ);
+#endif /* BT_WIFI_HANDOVER */
+#ifdef DBG_PKT_MON
+		setbit(eventmask_msg->mask, WLC_E_ROAM_PREP);
+#endif /* DBG_PKT_MON */
+#ifdef DHD_ULP
+		setbit(eventmask_msg->mask, WLC_E_ULP);
+#endif // endif
+#ifdef WL_NATOE
+		setbit(eventmask_msg->mask, WLC_E_NATOE_NFCT);
+#endif /* WL_NATOE */
+#ifdef WL_NAN
+		setbit(eventmask_msg->mask, WLC_E_SLOTTED_BSS_PEER_OP);
+#endif /* WL_NAN */
+#ifdef WL_MBO
+		setbit(eventmask_msg->mask, WLC_E_MBO);
+#endif /* WL_MBO */
+		/* Write updated Event mask */
+		eventmask_msg->ver = EVENTMSGS_VER;
+		eventmask_msg->command = EVENTMSGS_SET_MASK;
+		eventmask_msg->len = ROUNDUP(WLC_E_LAST, NBBY)/NBBY;
+		ret = dhd_iovar(dhd, 0, "event_msgs_ext", (char *)eventmask_msg, msglen, NULL, 0,
+				TRUE);
+		if (ret < 0) {
+			DHD_ERROR(("%s write event mask ext failed %d\n", __FUNCTION__, ret));
+			goto done;
+		}
+	} else if (ret2 == BCME_UNSUPPORTED || ret2 == BCME_VERSION) {
+		/* Skip for BCME_UNSUPPORTED or BCME_VERSION */
+		DHD_ERROR(("%s event_msgs_ext not support or version mismatch %d\n",
+			__FUNCTION__, ret2));
+	} else {
+		DHD_ERROR(("%s read event mask ext failed %d\n", __FUNCTION__, ret2));
+		ret = ret2;
+		goto done;
+	}
+
+done:
+
+	if (eventmask_msg) {
+		MFREE(dhd->osh, eventmask_msg, msglen);
+		eventmask_msg = NULL;
+	}
+	if (iov_buf) {
+		MFREE(dhd->osh, iov_buf, WLC_IOCTL_SMLEN);
+		iov_buf = NULL;
+	}
+	return ret;
+}
+
+int
+dhd_preinit_version(dhd_pub_t *dhd)
+{
+	int ret = 0;
+	char *buf, *ptr;
+
+	buf = (char*)MALLOC(dhd->osh, WLC_IOCTL_SMLEN);
+	if (buf == NULL) {
+		DHD_ERROR(("failed to allocate %d bytes for buf\n", WLC_IOCTL_SMLEN));
+		ret = BCME_NOMEM;
+		goto done;
+	}
+
+	/* query for 'clmver' to get clm version info from firmware */
+	memset(buf, 0, WLC_IOCTL_SMLEN);
+	ret = dhd_iovar(dhd, 0, "clmver", NULL, 0, buf, WLC_IOCTL_SMLEN, FALSE);
+	if (ret < 0)
+		DHD_ERROR(("%s failed %d\n", __FUNCTION__, ret));
+	else {
+		char *clmver_temp_buf = NULL;
+
+		if ((clmver_temp_buf = bcmstrstr(buf, "Data:")) == NULL) {
+			DHD_ERROR(("Couldn't find \"Data:\"\n"));
+		} else {
+			ptr = (clmver_temp_buf + strlen("Data:"));
+			if ((clmver_temp_buf = bcmstrtok(&ptr, "\n", 0)) == NULL) {
+				DHD_ERROR(("Couldn't find New line character\n"));
+			} else {
+				memset(clm_version, 0, CLM_VER_STR_LEN);
+				strncpy(clm_version, clmver_temp_buf,
+					MIN(strlen(clmver_temp_buf), CLM_VER_STR_LEN - 1));
+			}
+		}
+	}
+
+	/* query for 'ver' to get version info from firmware */
+	memset(buf, 0, WLC_IOCTL_SMLEN);
+	ptr = buf;
+	ret = dhd_iovar(dhd, 0, "ver", NULL, 0, (char *)buf, WLC_IOCTL_SMLEN, FALSE);
+	if (ret < 0)
+		DHD_ERROR(("%s failed %d\n", __FUNCTION__, ret));
+	else {
+		bcmstrtok(&ptr, "\n", 0);
+		strncpy(fw_version, buf, FW_VER_STR_LEN);
+		fw_version[FW_VER_STR_LEN-1] = '\0';
+		dhd_set_version_info(dhd, buf);
+#ifdef WRITE_WLANINFO
+		sec_save_wlinfo(buf, EPI_VERSION_STR, dhd->info->nv_path, clm_version);
+#endif /* WRITE_WLANINFO */
+	}
+
+done:
+	if (buf) {
+		MFREE(dhd->osh, buf, WLC_IOCTL_SMLEN);
+		buf = NULL;
+	}
+
+	return ret;
+}
+
+int
+dhd_preinit_ioctls(dhd_pub_t *dhd)
+{
+	int ret = 0;
+	uint32 iov_uint32;
+	char* iov_buf = NULL;
+#if defined(BCMSUP_4WAY_HANDSHAKE)
+	uint32 sup_wpa = 1;
+#endif /* BCMSUP_4WAY_HANDSHAKE */
+#if defined(CUSTOM_AMPDU_BA_WSIZE)
+	uint32 ampdu_ba_wsize = 0;
+#endif // endif
+#if defined(CUSTOM_AMPDU_MPDU)
+	int32 ampdu_mpdu = 0;
+#endif // endif
+#if defined(CUSTOM_AMPDU_RELEASE)
+	int32 ampdu_release = 0;
+#endif // endif
+#if defined(CUSTOM_AMSDU_AGGSF)
+	int32 amsdu_aggsf = 0;
+#endif // endif
+
+	uint32 frameburst = CUSTOM_FRAMEBURST_SET;
+#ifdef SUPPORT_SET_CAC
+	uint32 cac = 1;
+#endif /* SUPPORT_SET_CAC */
+
+#if defined(DHD_NON_DMA_M2M_CORRUPTION)
+	dhd_pcie_dmaxfer_lpbk_t pcie_dmaxfer_lpbk;
+#endif /* DHD_NON_DMA_M2M_CORRUPTION */
+
+#ifdef DHD_ENABLE_LPC
+	uint32 lpc = 1;
+#endif /* DHD_ENABLE_LPC */
+	uint power_mode = PM_FAST;
+#if defined(BCMSDIO)
+	uint32 dongle_align = DHD_SDALIGN;
+	uint32 glom = CUSTOM_GLOM_SETTING;
+#endif /* defined(BCMSDIO) */
+#if defined(USE_WL_CREDALL)
+	uint32 credall = 1;
+#endif // endif
+	uint bcn_timeout = CUSTOM_BCN_TIMEOUT;
+#ifdef ENABLE_BCN_LI_BCN_WAKEUP
+	uint32 bcn_li_bcn = 1;
+#endif /* ENABLE_BCN_LI_BCN_WAKEUP */
+	uint retry_max = CUSTOM_ASSOC_RETRY_MAX;
+	int scan_assoc_time = DHD_SCAN_ASSOC_ACTIVE_TIME;
+	int scan_unassoc_time = DHD_SCAN_UNASSOC_ACTIVE_TIME;
+	int scan_passive_time = DHD_SCAN_PASSIVE_TIME;
+	char *buf;
+	uint32 listen_interval = CUSTOM_LISTEN_INTERVAL; /* Default Listen Interval in Beacons */
+#if defined(DHD_8021X_DUMP) && defined(SHOW_LOGTRACE)
+	wl_el_tag_params_t *el_tag = NULL;
+#endif /* DHD_8021X_DUMP */
+#ifdef ROAM_ENABLE
+	uint roamvar = 0;
+	int roam_trigger[2] = {CUSTOM_ROAM_TRIGGER_SETTING, WLC_BAND_ALL};
+	int roam_scan_period[2] = {10, WLC_BAND_ALL};
+	int roam_delta[2] = {CUSTOM_ROAM_DELTA_SETTING, WLC_BAND_ALL};
+#ifdef ROAM_AP_ENV_DETECTION
+	int roam_env_mode = AP_ENV_INDETERMINATE;
+#endif /* ROAM_AP_ENV_DETECTION */
+#ifdef FULL_ROAMING_SCAN_PERIOD_60_SEC
+	int roam_fullscan_period = 60;
+#else /* FULL_ROAMING_SCAN_PERIOD_60_SEC */
+	int roam_fullscan_period = 120;
+#endif /* FULL_ROAMING_SCAN_PERIOD_60_SEC */
+#ifdef DISABLE_BCNLOSS_ROAM
+	uint roam_bcnloss_off = 1;
+#endif /* DISABLE_BCNLOSS_ROAM */
+#else
+#ifdef DISABLE_BUILTIN_ROAM
+	uint roamvar = 1;
+#endif /* DISABLE_BUILTIN_ROAM */
+#endif /* ROAM_ENABLE */
+
+#if defined(SOFTAP)
+	uint dtim = 1;
+#endif // endif
+#ifdef BCMCCX
+	uint32 ccx = 1;
+#endif // endif
+#ifdef SOFTAP_UAPSD_OFF
+	uint32 wme_apsd = 0;
+#endif /* SOFTAP_UAPSD_OFF */
+#ifdef GET_CUSTOM_MAC_ENABLE
+	struct ether_addr ea_addr;
+	char hw_ether[62];
+#endif /* GET_CUSTOM_MAC_ENABLE */
+#ifdef OKC_SUPPORT
+	uint32 okc = 1;
+#endif // endif
+
+#ifdef DISABLE_11N
+	uint32 nmode = 0;
+#endif /* DISABLE_11N */
+
+#ifdef USE_WL_TXBF
+	uint32 txbf = 1;
+#endif /* USE_WL_TXBF */
+#ifdef DISABLE_TXBFR
+	uint32 txbf_bfr_cap = 0;
+#endif /* DISABLE_TXBFR */
+#ifdef AMPDU_VO_ENABLE
+	struct ampdu_tid_control tid;
+#endif // endif
+#ifdef DHD_SET_FW_HIGHSPEED
+	uint32 ack_ratio = 250;
+	uint32 ack_ratio_depth = 64;
+#endif /* DHD_SET_FW_HIGHSPEED */
+#if defined(SUPPORT_2G_VHT) || defined(SUPPORT_5G_1024QAM_VHT)
+	uint32 vht_features = 0; /* init to 0, will be set based on each support */
+#endif /* SUPPORT_2G_VHT || SUPPORT_5G_1024QAM_VHT */
+#ifdef DISABLE_11N_PROPRIETARY_RATES
+	uint32 ht_features = 0;
+#endif /* DISABLE_11N_PROPRIETARY_RATES */
+#ifdef CUSTOM_PSPRETEND_THR
+	uint32 pspretend_thr = CUSTOM_PSPRETEND_THR;
+#endif // endif
+#ifdef CUSTOM_EVENT_PM_WAKE
+	uint32 pm_awake_thresh = CUSTOM_EVENT_PM_WAKE;
+#endif	/* CUSTOM_EVENT_PM_WAKE */
+#ifdef DISABLE_PRUNED_SCAN
+	uint32 scan_features = 0;
+#endif /* DISABLE_PRUNED_SCAN */
+#ifdef BCMPCIE_OOB_HOST_WAKE
+	uint32 hostwake_oob = 0;
+#endif /* BCMPCIE_OOB_HOST_WAKE */
+
+#ifdef PKT_FILTER_SUPPORT
+	dhd_pkt_filter_enable = TRUE;
+#ifdef APF
+	dhd->apf_set = FALSE;
+#endif /* APF */
+#endif /* PKT_FILTER_SUPPORT */
+#ifdef WLTDLS
+	dhd->tdls_enable = FALSE;
+	dhd_tdls_set_mode(dhd, false);
+#endif /* WLTDLS */
+	dhd->suspend_bcn_li_dtim = CUSTOM_SUSPEND_BCN_LI_DTIM;
+#ifdef ENABLE_MAX_DTIM_IN_SUSPEND
+	dhd->max_dtim_enable = TRUE;
+#else
+	dhd->max_dtim_enable = FALSE;
+#endif /* ENABLE_MAX_DTIM_IN_SUSPEND */
+	DHD_TRACE(("Enter %s\n", __FUNCTION__));
+
+	buf = (char*)MALLOC(dhd->osh, WLC_IOCTL_SMLEN);
+	if (buf == NULL) {
+		DHD_ERROR(("failed to allocate %d bytes for buf\n", WLC_IOCTL_SMLEN));
+		ret = BCME_NOMEM;
+		goto done;
+	}
+
+#ifdef DHDTCPACK_SUPPRESS
+	dhd_tcpack_suppress_set(dhd, dhd->conf->tcpack_sup_mode);
+#endif
+	dhd->op_mode = 0;
+
+#if defined(CUSTOM_COUNTRY_CODE)
+	/* clear AP flags */
+	dhd->dhd_cflags &= ~WLAN_PLAT_AP_FLAG;
+#endif /* CUSTOM_COUNTRY_CODE && (CUSTOMER_HW2 || BOARD_HIKEY) */
+
+	if ((!op_mode && dhd_get_fw_mode(dhd->info) == DHD_FLAG_MFG_MODE) ||
+		(op_mode == DHD_FLAG_MFG_MODE)) {
+		dhd->op_mode = DHD_FLAG_MFG_MODE;
+#ifdef DHD_PCIE_NATIVE_RUNTIMEPM
+		/* disable runtimePM by default in MFG mode. */
+		pm_runtime_disable(dhd_bus_to_dev(dhd->bus));
+#endif /* DHD_PCIE_NATIVE_RUNTIMEPM */
+		/* Check and adjust IOCTL response timeout for Manufactring firmware */
+		dhd_os_set_ioctl_resp_timeout(MFG_IOCTL_RESP_TIMEOUT);
+		DHD_ERROR(("%s : Set IOCTL response time for Manufactring Firmware\n",
+			__FUNCTION__));
+	} else {
+		dhd_os_set_ioctl_resp_timeout(IOCTL_RESP_TIMEOUT);
+		DHD_INFO(("%s : Set IOCTL response time.\n", __FUNCTION__));
+	}
+#ifdef BCMPCIE_OOB_HOST_WAKE
+	ret = dhd_iovar(dhd, 0, "bus:hostwake_oob", NULL, 0, (char *)&hostwake_oob,
+		sizeof(hostwake_oob), FALSE);
+	if (ret < 0) {
+		DHD_ERROR(("%s: hostwake_oob IOVAR not present, proceed\n", __FUNCTION__));
+	} else {
+		if (hostwake_oob == 0) {
+			DHD_ERROR(("%s: hostwake_oob is not enabled in the NVRAM, STOP\n",
+				__FUNCTION__));
+			ret = BCME_UNSUPPORTED;
+			goto done;
+		} else {
+			DHD_ERROR(("%s: hostwake_oob enabled\n", __FUNCTION__));
+		}
+	}
+#endif /* BCMPCIE_OOB_HOST_WAKE */
+#ifdef GET_CUSTOM_MAC_ENABLE
+	ret = wifi_platform_get_mac_addr(dhd->info->adapter, hw_ether);
+	if (!ret) {
+		memset(buf, 0, WLC_IOCTL_SMLEN);
+		bcopy(hw_ether, ea_addr.octet, sizeof(struct ether_addr));
+		bcm_mkiovar("cur_etheraddr", (void *)&ea_addr, ETHER_ADDR_LEN, buf, WLC_IOCTL_SMLEN);
+		ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, buf, WLC_IOCTL_SMLEN, TRUE, 0);
+		if (ret < 0) {
+			memset(buf, 0, WLC_IOCTL_SMLEN);
+			bcm_mkiovar("hw_ether", hw_ether, sizeof(hw_ether), buf, WLC_IOCTL_SMLEN);
+			ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, buf, WLC_IOCTL_SMLEN, TRUE, 0);
+			if (ret) {
+				int i;
+				DHD_ERROR(("%s: can't set MAC address MAC="MACDBG", error=%d\n",
+					__FUNCTION__, MAC2STRDBG(hw_ether), ret));
+				for (i=0; i<sizeof(hw_ether)-ETHER_ADDR_LEN; i++) {
+					printf("0x%02x,", hw_ether[i+ETHER_ADDR_LEN]);
+					if ((i+1)%8 == 0)
+						printf("\n");
+				}
+				ret = BCME_NOTUP;
+				goto done;
+			}
+		}
+	} else {
+		DHD_ERROR(("%s: can't get custom MAC address, ret=%d\n", __FUNCTION__, ret));
+		ret = BCME_NOTUP;
+		goto done;
+	}
+#endif /* GET_CUSTOM_MAC_ENABLE */
+	/* Get the default device MAC address directly from firmware */
+	memset(buf, 0, WLC_IOCTL_SMLEN);
+	bcm_mkiovar("cur_etheraddr", 0, 0, buf, WLC_IOCTL_SMLEN);
+	if ((ret = dhd_wl_ioctl_cmd(dhd, WLC_GET_VAR, buf, WLC_IOCTL_SMLEN,
+		FALSE, 0)) < 0) {
+		DHD_ERROR(("%s: can't get MAC address , error=%d\n", __FUNCTION__, ret));
+		ret = BCME_NOTUP;
+		goto done;
+	}
+	/* Update public MAC address after reading from Firmware */
+	memcpy(dhd->mac.octet, buf, ETHER_ADDR_LEN);
+
+	if ((ret = dhd_apply_default_clm(dhd, dhd->clm_path)) < 0) {
+		DHD_ERROR(("%s: CLM set failed. Abort initialization.\n", __FUNCTION__));
+		goto done;
+	}
+
+	/* get a capabilities from firmware */
+	{
+		uint32 cap_buf_size = sizeof(dhd->fw_capabilities);
+		memset(dhd->fw_capabilities, 0, cap_buf_size);
+		ret = dhd_iovar(dhd, 0, "cap", NULL, 0, dhd->fw_capabilities, (cap_buf_size - 1),
+				FALSE);
+		if (ret < 0) {
+			DHD_ERROR(("%s: Get Capability failed (error=%d)\n",
+				__FUNCTION__, ret));
+			return 0;
+		}
+
+		memmove(&dhd->fw_capabilities[1], dhd->fw_capabilities, (cap_buf_size - 1));
+		dhd->fw_capabilities[0] = ' ';
+		dhd->fw_capabilities[cap_buf_size - 2] = ' ';
+		dhd->fw_capabilities[cap_buf_size - 1] = '\0';
+	}
+
+	ret = dhd_preinit_op_mode(dhd);
+	if (ret < 0) {
+		DHD_ERROR(("%s dhd_preinit_op_mode failed %d\n", __FUNCTION__, ret));
+		goto done;
+	}
+
 #ifdef BCMSDIO
 	if (dhd->conf->sd_f2_blocksize)
 		dhdsdio_func_blocksize(dhd, 2, dhd->conf->sd_f2_blocksize);
@@ -12077,11 +12526,6 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	ret = dhd_iovar(dhd, 0, "assoc_retry_max", (char *)&retry_max, sizeof(retry_max), NULL, 0,
 			TRUE);
 
-#if defined(AP) && !defined(WLP2P)
-	ret = dhd_iovar(dhd, 0, "apsta", (char *)&apsta, sizeof(apsta), NULL, 0, TRUE);
-
-#endif /* defined(AP) && !defined(WLP2P) */
-
 #ifdef MIMO_ANT_SETTING
 	dhd_sel_ant_from_file(dhd);
 #endif /* MIMO_ANT_SETTING */
@@ -12116,7 +12560,8 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 
 #endif /* USE_WL_TXBF */
 
-	ret = dhd_iovar(dhd, 0, "scancache", (char *)&scancache_enab, sizeof(scancache_enab), NULL,
+	iov_uint32 = 1;
+	ret = dhd_iovar(dhd, 0, "scancache", (char *)&iov_uint32, sizeof(iov_uint32), NULL,
 			0, TRUE);
 	if (ret < 0) {
 		DHD_ERROR(("%s Set scancache failed %d\n", __FUNCTION__, ret));
@@ -12288,7 +12733,8 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	}
 #endif // endif
 
-	ret = dhd_iovar(dhd, 0, "buf_key_b4_m4", (char *)&buf_key_b4_m4, sizeof(buf_key_b4_m4),
+	iov_uint32 = 1;
+	ret = dhd_iovar(dhd, 0, "buf_key_b4_m4", (char *)&iov_uint32, sizeof(iov_uint32),
 			NULL, 0, TRUE);
 	if (ret < 0) {
 		DHD_ERROR(("%s buf_key_b4_m4 set failed %d\n", __FUNCTION__, ret));
@@ -12304,102 +12750,6 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	dhd_ulp_preinit(dhd);
 #endif /* DHD_ULP */
 
-	/* Read event_msgs mask */
-	ret = dhd_iovar(dhd, 0, "event_msgs", eventmask, WL_EVENTING_MASK_LEN, iovbuf,
-			sizeof(iovbuf), FALSE);
-	if (ret < 0) {
-		DHD_ERROR(("%s read Event mask failed %d\n", __FUNCTION__, ret));
-		goto done;
-	}
-	bcopy(iovbuf, eventmask, WL_EVENTING_MASK_LEN);
-
-	/* Setup event_msgs */
-	setbit(eventmask, WLC_E_SET_SSID);
-	setbit(eventmask, WLC_E_PRUNE);
-	setbit(eventmask, WLC_E_AUTH);
-	setbit(eventmask, WLC_E_AUTH_IND);
-	setbit(eventmask, WLC_E_ASSOC);
-	setbit(eventmask, WLC_E_REASSOC);
-	setbit(eventmask, WLC_E_REASSOC_IND);
-	if (!(dhd->op_mode & DHD_FLAG_IBSS_MODE))
-		setbit(eventmask, WLC_E_DEAUTH);
-	setbit(eventmask, WLC_E_DEAUTH_IND);
-	setbit(eventmask, WLC_E_DISASSOC_IND);
-	setbit(eventmask, WLC_E_DISASSOC);
-	setbit(eventmask, WLC_E_JOIN);
-	setbit(eventmask, WLC_E_START);
-	setbit(eventmask, WLC_E_ASSOC_IND);
-	setbit(eventmask, WLC_E_PSK_SUP);
-	setbit(eventmask, WLC_E_LINK);
-	setbit(eventmask, WLC_E_MIC_ERROR);
-	setbit(eventmask, WLC_E_ASSOC_REQ_IE);
-	setbit(eventmask, WLC_E_ASSOC_RESP_IE);
-#ifdef LIMIT_BORROW
-	setbit(eventmask, WLC_E_ALLOW_CREDIT_BORROW);
-#endif // endif
-#ifndef WL_CFG80211
-	setbit(eventmask, WLC_E_PMKID_CACHE);
-//	setbit(eventmask, WLC_E_TXFAIL); // terence 20181106: remove unnecessary event
-#endif // endif
-	setbit(eventmask, WLC_E_JOIN_START);
-//	setbit(eventmask, WLC_E_SCAN_COMPLETE); // terence 20150628: remove redundant event
-#ifdef DHD_DEBUG
-	setbit(eventmask, WLC_E_SCAN_CONFIRM_IND);
-#endif // endif
-#ifdef PNO_SUPPORT
-	setbit(eventmask, WLC_E_PFN_NET_FOUND);
-	setbit(eventmask, WLC_E_PFN_BEST_BATCHING);
-	setbit(eventmask, WLC_E_PFN_BSSID_NET_FOUND);
-	setbit(eventmask, WLC_E_PFN_BSSID_NET_LOST);
-#endif /* PNO_SUPPORT */
-	/* enable dongle roaming event */
-#ifdef WL_CFG80211
-	setbit(eventmask, WLC_E_ROAM);
-	setbit(eventmask, WLC_E_BSSID);
-#endif /* WL_CFG80211 */
-#ifdef BCMCCX
-	setbit(eventmask, WLC_E_ADDTS_IND);
-	setbit(eventmask, WLC_E_DELTS_IND);
-#endif /* BCMCCX */
-#ifdef WLTDLS
-	setbit(eventmask, WLC_E_TDLS_PEER_EVENT);
-#endif /* WLTDLS */
-#ifdef WL_ESCAN
-	setbit(eventmask, WLC_E_ESCAN_RESULT);
-#endif /* WL_ESCAN */
-#ifdef RTT_SUPPORT
-	setbit(eventmask, WLC_E_PROXD);
-#endif /* RTT_SUPPORT */
-#ifdef WL_CFG80211
-	setbit(eventmask, WLC_E_ESCAN_RESULT);
-	setbit(eventmask, WLC_E_AP_STARTED);
-	setbit(eventmask, WLC_E_ACTION_FRAME_RX);
-	if (dhd->op_mode & DHD_FLAG_P2P_MODE) {
-		setbit(eventmask, WLC_E_P2P_DISC_LISTEN_COMPLETE);
-	}
-#endif /* WL_CFG80211 */
-
-#if defined(SHOW_LOGTRACE) && defined(LOGTRACE_FROM_FILE)
-	if (dhd_logtrace_from_file(dhd)) {
-		setbit(eventmask, WLC_E_TRACE);
-	} else {
-		clrbit(eventmask, WLC_E_TRACE);
-	}
-#elif defined(SHOW_LOGTRACE)
-	setbit(eventmask, WLC_E_TRACE);
-#else
-	clrbit(eventmask, WLC_E_TRACE);
-#endif /* defined(SHOW_LOGTRACE) && defined(LOGTRACE_FROM_FILE) */
-
-	setbit(eventmask, WLC_E_CSA_COMPLETE_IND);
-#ifdef CUSTOM_EVENT_PM_WAKE
-	setbit(eventmask, WLC_E_EXCESS_PM_WAKE_EVENT);
-#endif	/* CUSTOM_EVENT_PM_WAKE */
-#ifdef DHD_LOSSLESS_ROAMING
-	setbit(eventmask, WLC_E_ROAM_PREP);
-#endif // endif
-	/* nan events */
-	setbit(eventmask, WLC_E_NAN);
 #if defined(PCIE_FULL_DONGLE) && defined(DHD_LOSSLESS_ROAMING)
 	dhd_update_flow_prio_map(dhd, DHD_FLOW_PRIO_LLR_MAP);
 #endif /* defined(PCIE_FULL_DONGLE) && defined(DHD_LOSSLESS_ROAMING) */
@@ -12408,76 +12758,9 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	dhd_update_flow_prio_map(dhd, DHD_FLOW_PRIO_LLR_MAP);
 #endif /* defined(BCMPCIE) && defined(EAPOL_PKT_PRIO) */
 
-	/* Write updated Event mask */
-	ret = dhd_iovar(dhd, 0, "event_msgs", eventmask, WL_EVENTING_MASK_LEN, NULL, 0, TRUE);
+	ret = dhd_preinit_eventmask(dhd);
 	if (ret < 0) {
-		DHD_ERROR(("%s Set Event mask failed %d\n", __FUNCTION__, ret));
-		goto done;
-	}
-
-	/* make up event mask ext message iovar for event larger than 128 */
-	msglen = ROUNDUP(WLC_E_LAST, NBBY)/NBBY + EVENTMSGS_EXT_STRUCT_SIZE;
-	eventmask_msg = (eventmsgs_ext_t*)MALLOC(dhd->osh, msglen);
-	if (eventmask_msg == NULL) {
-		DHD_ERROR(("failed to allocate %d bytes for event_msg_ext\n", msglen));
-		ret = BCME_NOMEM;
-		goto done;
-	}
-	bzero(eventmask_msg, msglen);
-	eventmask_msg->ver = EVENTMSGS_VER;
-	eventmask_msg->len = ROUNDUP(WLC_E_LAST, NBBY)/NBBY;
-
-	/* Read event_msgs_ext mask */
-	ret2 = dhd_iovar(dhd, 0, "event_msgs_ext", (char *)eventmask_msg, msglen, iov_buf,
-			WLC_IOCTL_SMLEN, FALSE);
-
-	if (ret2 == 0) { /* event_msgs_ext must be supported */
-		bcopy(iov_buf, eventmask_msg, msglen);
-#ifdef RSSI_MONITOR_SUPPORT
-		setbit(eventmask_msg->mask, WLC_E_RSSI_LQM);
-#endif /* RSSI_MONITOR_SUPPORT */
-#ifdef GSCAN_SUPPORT
-		setbit(eventmask_msg->mask, WLC_E_PFN_GSCAN_FULL_RESULT);
-		setbit(eventmask_msg->mask, WLC_E_PFN_SCAN_COMPLETE);
-		setbit(eventmask_msg->mask, WLC_E_PFN_SSID_EXT);
-		setbit(eventmask_msg->mask, WLC_E_ROAM_EXP_EVENT);
-#endif /* GSCAN_SUPPORT */
-		setbit(eventmask_msg->mask, WLC_E_RSSI_LQM);
-#ifdef BT_WIFI_HANDOVER
-		setbit(eventmask_msg->mask, WLC_E_BT_WIFI_HANDOVER_REQ);
-#endif /* BT_WIFI_HANDOVER */
-#ifdef DBG_PKT_MON
-		setbit(eventmask_msg->mask, WLC_E_ROAM_PREP);
-#endif /* DBG_PKT_MON */
-#ifdef DHD_ULP
-		setbit(eventmask_msg->mask, WLC_E_ULP);
-#endif // endif
-#ifdef WL_NATOE
-		setbit(eventmask_msg->mask, WLC_E_NATOE_NFCT);
-#endif /* WL_NATOE */
-#ifdef WL_NAN
-		setbit(eventmask_msg->mask, WLC_E_SLOTTED_BSS_PEER_OP);
-#endif /* WL_NAN */
-#ifdef WL_MBO
-		setbit(eventmask_msg->mask, WLC_E_MBO);
-#endif /* WL_MBO */
-		/* Write updated Event mask */
-		eventmask_msg->ver = EVENTMSGS_VER;
-		eventmask_msg->command = EVENTMSGS_SET_MASK;
-		eventmask_msg->len = ROUNDUP(WLC_E_LAST, NBBY)/NBBY;
-		ret = dhd_iovar(dhd, 0, "event_msgs_ext", (char *)eventmask_msg, msglen, NULL, 0,
-				TRUE);
-		if (ret < 0) {
-			DHD_ERROR(("%s write event mask ext failed %d\n", __FUNCTION__, ret));
-			goto done;
-		}
-	} else if (ret2 == BCME_UNSUPPORTED || ret2 == BCME_VERSION) {
-		/* Skip for BCME_UNSUPPORTED or BCME_VERSION */
-		DHD_ERROR(("%s event_msgs_ext not support or version mismatch %d\n",
-			__FUNCTION__, ret2));
-	} else {
-		DHD_ERROR(("%s read event mask ext failed %d\n", __FUNCTION__, ret2));
-		ret = ret2;
+		DHD_ERROR(("%s dhd_preinit_eventmask failed %d\n", __FUNCTION__, ret));
 		goto done;
 	}
 
@@ -12504,88 +12787,10 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	dhd_wl_ioctl_cmd(dhd, WLC_SET_SCAN_PASSIVE_TIME, (char *)&scan_passive_time,
 		sizeof(scan_passive_time), TRUE, 0);
 
-#ifdef ARP_OFFLOAD_SUPPORT
-	/* Set and enable ARP offload feature for STA only  */
-#if defined(SOFTAP)
-	if (arpoe && !ap_fw_loaded)
-#else
-	if (arpoe)
-#endif // endif
-	{
-		dhd_arp_offload_enable(dhd, TRUE);
-		dhd_arp_offload_set(dhd, dhd_arp_mode);
-	} else {
-		dhd_arp_offload_enable(dhd, FALSE);
-		dhd_arp_offload_set(dhd, 0);
-	}
-	dhd_arp_enable = arpoe;
-#endif /* ARP_OFFLOAD_SUPPORT */
-
 #ifdef PKT_FILTER_SUPPORT
-	/* Setup default defintions for pktfilter , enable in suspend */
-	if (dhd_master_mode) {
-		dhd->pktfilter_count = 6;
-		dhd->pktfilter[DHD_BROADCAST_FILTER_NUM] = NULL;
-		if (!FW_SUPPORTED(dhd, pf6)) {
-			dhd->pktfilter[DHD_MULTICAST4_FILTER_NUM] = NULL;
-			dhd->pktfilter[DHD_MULTICAST6_FILTER_NUM] = NULL;
-		} else {
-			/* Immediately pkt filter TYPE 6 Discard IPv4/IPv6 Multicast Packet */
-			dhd->pktfilter[DHD_MULTICAST4_FILTER_NUM] = DISCARD_IPV4_MCAST;
-			dhd->pktfilter[DHD_MULTICAST6_FILTER_NUM] = DISCARD_IPV6_MCAST;
-		}
-		/* apply APP pktfilter */
-		dhd->pktfilter[DHD_ARP_FILTER_NUM] = "105 0 0 12 0xFFFF 0x0806";
-
-#ifdef BLOCK_IPV6_PACKET
-		/* Setup filter to allow only IPv4 unicast frames */
-		dhd->pktfilter[DHD_UNICAST_FILTER_NUM] = "100 0 0 0 "
-			HEX_PREF_STR UNI_FILTER_STR ZERO_ADDR_STR ETHER_TYPE_STR IPV6_FILTER_STR
-			" "
-			HEX_PREF_STR ZERO_ADDR_STR ZERO_ADDR_STR ETHER_TYPE_STR ZERO_TYPE_STR;
-#else
-		/* Setup filter to allow only unicast */
-		dhd->pktfilter[DHD_UNICAST_FILTER_NUM] = "100 0 0 0 0x01 0x00";
-#endif /* BLOCK_IPV6_PACKET */
-
-#ifdef PASS_IPV4_SUSPEND
-		dhd->pktfilter[DHD_MDNS_FILTER_NUM] = "104 0 0 0 0xFFFFFF 0x01005E";
-#else
-		/* Add filter to pass multicastDNS packet and NOT filter out as Broadcast */
-		dhd->pktfilter[DHD_MDNS_FILTER_NUM] = NULL;
-#endif /* PASS_IPV4_SUSPEND */
-		if (FW_SUPPORTED(dhd, pf6)) {
-			/* Immediately pkt filter TYPE 6 Dicard Broadcast IP packet */
-			dhd->pktfilter[DHD_IP4BCAST_DROP_FILTER_NUM] = DISCARD_IPV4_BCAST;
-			/* Immediately pkt filter TYPE 6 Dicard Cisco STP packet */
-			dhd->pktfilter[DHD_LLC_STP_DROP_FILTER_NUM] = DISCARD_LLC_STP;
-			/* Immediately pkt filter TYPE 6 Dicard Cisco XID protocol */
-			dhd->pktfilter[DHD_LLC_XID_DROP_FILTER_NUM] = DISCARD_LLC_XID;
-			dhd->pktfilter_count = 10;
-		}
-
-#ifdef GAN_LITE_NAT_KEEPALIVE_FILTER
-		dhd->pktfilter_count = 4;
-		/* Setup filter to block broadcast and NAT Keepalive packets */
-		/* discard all broadcast packets */
-		dhd->pktfilter[DHD_UNICAST_FILTER_NUM] = "100 0 0 0 0xffffff 0xffffff";
-		/* discard NAT Keepalive packets */
-		dhd->pktfilter[DHD_BROADCAST_FILTER_NUM] = "102 0 0 36 0xffffffff 0x11940009";
-		/* discard NAT Keepalive packets */
-		dhd->pktfilter[DHD_MULTICAST4_FILTER_NUM] = "104 0 0 38 0xffffffff 0x11940009";
-		dhd->pktfilter[DHD_MULTICAST6_FILTER_NUM] = NULL;
-#endif /* GAN_LITE_NAT_KEEPALIVE_FILTER */
-	} else
-		dhd_conf_discard_pkt_filter(dhd);
-	dhd_conf_add_pkt_filter(dhd);
-
-#if defined(SOFTAP)
-	if (ap_fw_loaded) {
-		dhd_enable_packet_filter(0, dhd);
-	}
-#endif /* defined(SOFTAP) */
-	dhd_set_packet_filter(dhd);
+	dhd_preinit_pkt_filter(dhd);
 #endif /* PKT_FILTER_SUPPORT */
+
 #ifdef DISABLE_11N
 	ret = dhd_iovar(dhd, 0, "nmode", (char *)&nmode, sizeof(nmode), NULL, 0, TRUE);
 	if (ret < 0)
@@ -12605,43 +12810,13 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	tid.enable = TRUE;
 	ret = dhd_iovar(dhd, 0, "ampdu_tid", (char *)&tid, sizeof(tid), NULL, 0, TRUE);
 #endif // endif
-	/* query for 'clmver' to get clm version info from firmware */
-	memset(buf, 0, sizeof(buf));
-	ret = dhd_iovar(dhd, 0, "clmver", NULL, 0, buf, sizeof(buf), FALSE);
-	if (ret < 0)
-		DHD_ERROR(("%s failed %d\n", __FUNCTION__, ret));
-	else {
-		char *clmver_temp_buf = NULL;
 
-		if ((clmver_temp_buf = bcmstrstr(buf, "Data:")) == NULL) {
-			DHD_ERROR(("Couldn't find \"Data:\"\n"));
-		} else {
-			ptr = (clmver_temp_buf + strlen("Data:"));
-			if ((clmver_temp_buf = bcmstrtok(&ptr, "\n", 0)) == NULL) {
-				DHD_ERROR(("Couldn't find New line character\n"));
-			} else {
-				memset(clm_version, 0, CLM_VER_STR_LEN);
-				strncpy(clm_version, clmver_temp_buf,
-					MIN(strlen(clmver_temp_buf), CLM_VER_STR_LEN - 1));
-			}
-		}
+	ret = dhd_preinit_version(dhd);
+	if (ret < 0) {
+		DHD_ERROR(("%s dhd_preinit_version failed %d\n", __FUNCTION__, ret));
+		goto done;
 	}
 
-	/* query for 'ver' to get version info from firmware */
-	memset(buf, 0, sizeof(buf));
-	ptr = buf;
-	ret = dhd_iovar(dhd, 0, "ver", NULL, 0, (char *)&buf, sizeof(buf), FALSE);
-	if (ret < 0)
-		DHD_ERROR(("%s failed %d\n", __FUNCTION__, ret));
-	else {
-		bcmstrtok(&ptr, "\n", 0);
-		strncpy(fw_version, buf, FW_VER_STR_LEN);
-		fw_version[FW_VER_STR_LEN-1] = '\0';
-		dhd_set_version_info(dhd, buf);
-#ifdef WRITE_WLANINFO
-		sec_save_wlinfo(buf, EPI_VERSION_STR, dhd->info->nv_path, clm_version);
-#endif /* WRITE_WLANINFO */
-	}
 #ifdef GEN_SOFTAP_INFO_FILE
 	sec_save_softap_info();
 #endif /* GEN_SOFTAP_INFO_FILE */
@@ -12650,84 +12825,17 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	dhd_txglom_enable(dhd, dhd->conf->bus_rxglom);
 #endif /* defined(BCMSDIO) */
 
-#if defined(BCMSDIO) || defined(BCMDBUS)
-#ifdef PROP_TXSTATUS
-	if (disable_proptx ||
-#ifdef PROP_TXSTATUS_VSDB
-		/* enable WLFC only if the firmware is VSDB when it is in STA mode */
-		(dhd->op_mode != DHD_FLAG_HOSTAP_MODE &&
-		 dhd->op_mode != DHD_FLAG_IBSS_MODE) ||
-#endif /* PROP_TXSTATUS_VSDB */
-		FALSE) {
-		wlfc_enable = FALSE;
-	}
-	ret = dhd_conf_get_disable_proptx(dhd);
-	if (ret == 0){
-		disable_proptx = 0;
-		wlfc_enable = TRUE;
-	} else if (ret >= 1) {
-		disable_proptx = 1;
-		wlfc_enable = FALSE;
-		/* terence 20161229: we should set ampdu_hostreorder=0 when disable_proptx=1 */
-		hostreorder = 0;
+	ret = dhd_preinit_proptx(dhd);
+	if (ret < 0) {
+		DHD_ERROR(("%s dhd_preinit_version failed %d\n", __FUNCTION__, ret));
+		goto done;
 	}
 
-#if defined(PROP_TXSTATUS)
-#ifdef USE_WFA_CERT_CONF
-	if (sec_get_param_wfa_cert(dhd, SET_PARAM_PROPTX, &proptx) == BCME_OK) {
-		DHD_ERROR(("%s , read proptx param=%d\n", __FUNCTION__, proptx));
-		wlfc_enable = proptx;
-	}
-#endif /* USE_WFA_CERT_CONF */
-#endif /* PROP_TXSTATUS */
-
-#ifndef DISABLE_11N
-	ret = dhd_wl_ioctl_cmd(dhd, WLC_DOWN, (char *)&wl_down, sizeof(wl_down), TRUE, 0);
-	ret2 = dhd_iovar(dhd, 0, "ampdu_hostreorder", (char *)&hostreorder, sizeof(hostreorder),
-			NULL, 0, TRUE);
-	if (ret2 < 0) {
-		DHD_ERROR(("%s wl ampdu_hostreorder failed %d\n", __FUNCTION__, ret2));
-		if (ret2 != BCME_UNSUPPORTED)
-			ret = ret2;
-
-		if (ret == BCME_NOTDOWN) {
-			uint wl_down = 1;
-			ret2 = dhd_wl_ioctl_cmd(dhd, WLC_DOWN, (char *)&wl_down,
-				sizeof(wl_down), TRUE, 0);
-			DHD_ERROR(("%s ampdu_hostreorder fail WL_DOWN : %d, hostreorder :%d\n",
-				__FUNCTION__, ret2, hostreorder));
-
-			ret2 = dhd_iovar(dhd, 0, "ampdu_hostreorder", (char *)&hostreorder,
-					sizeof(hostreorder), NULL, 0, TRUE);
-			DHD_ERROR(("%s wl ampdu_hostreorder. ret --> %d\n", __FUNCTION__, ret2));
-			if (ret2 != BCME_UNSUPPORTED)
-					ret = ret2;
-		}
-		if (ret2 != BCME_OK)
-			hostreorder = 0;
-	}
-#endif /* DISABLE_11N */
-
-	if (wlfc_enable) {
-		dhd_wlfc_init(dhd);
-		/* terence 20161229: enable ampdu_hostreorder if tlv enabled */
-		dhd_conf_set_intiovar(dhd, WLC_SET_VAR, "ampdu_hostreorder", 1, 0, TRUE);
-	}
-#ifndef DISABLE_11N
-	else if (hostreorder)
-		dhd_wlfc_hostreorder_init(dhd);
-#endif /* DISABLE_11N */
-#else
-	/* terence 20161229: disable ampdu_hostreorder if PROP_TXSTATUS not defined */
-	printf("%s: not define PROP_TXSTATUS\n", __FUNCTION__);
-	dhd_conf_set_intiovar(dhd, WLC_SET_VAR, "ampdu_hostreorder", 0, 0, TRUE);
-#endif /* PROP_TXSTATUS */
-#endif /* BCMSDIO || BCMDBUS */
 #ifndef PCIE_FULL_DONGLE
 	/* For FD we need all the packets at DHD to handle intra-BSS forwarding */
 	if (FW_SUPPORTED(dhd, ap)) {
-		wl_ap_isolate = AP_ISOLATE_SENDUP_ALL;
-		ret = dhd_iovar(dhd, 0, "ap_isolate", (char *)&wl_ap_isolate, sizeof(wl_ap_isolate),
+		iov_uint32 = AP_ISOLATE_SENDUP_ALL;
+		ret = dhd_iovar(dhd, 0, "ap_isolate", (char *)&iov_uint32, sizeof(iov_uint32),
 				NULL, 0, TRUE);
 		if (ret < 0)
 			DHD_ERROR(("%s failed %d\n", __FUNCTION__, ret));
@@ -12777,11 +12885,11 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 
 	/* check dongle supports wbtext (product policy) or not */
 	dhd->wbtext_support = FALSE;
-	if (dhd_wl_ioctl_get_intiovar(dhd, "wnm_bsstrans_resp", &wnm_bsstrans_resp,
+	if (dhd_wl_ioctl_get_intiovar(dhd, "wnm_bsstrans_resp", &iov_uint32,
 			WLC_GET_VAR, FALSE, 0) != BCME_OK) {
 		DHD_ERROR(("failed to get wnm_bsstrans_resp\n"));
 	}
-	dhd->wbtext_policy = wnm_bsstrans_resp;
+	dhd->wbtext_policy = iov_uint32;
 	if (dhd->wbtext_policy == WL_BSSTRANS_POLICY_PRODUCT_WBTEXT) {
 		dhd->wbtext_support = TRUE;
 	}
@@ -12823,12 +12931,12 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 #endif /* DHD_NON_DMA_M2M_CORRUPTION */
 
 	/* WNM capabilities */
-	wnm_cap = 0
+	iov_uint32 = 0;
 #ifdef WL11U
 		| WL_WNM_BSSTRANS | WL_WNM_NOTIF
 #endif // endif
 		;
-	if (dhd_iovar(dhd, 0, "wnm", (char *)&wnm_cap, sizeof(wnm_cap), NULL, 0, TRUE) < 0) {
+	if (dhd_iovar(dhd, 0, "wnm", (char *)&iov_uint32, sizeof(iov_uint32), NULL, 0, TRUE) < 0) {
 		DHD_ERROR(("failed to set WNM capabilities\n"));
 	}
 
@@ -12860,10 +12968,6 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	dhd_conf_postinit_ioctls(dhd);
 done:
 
-	if (eventmask_msg) {
-		MFREE(dhd->osh, eventmask_msg, msglen);
-		eventmask_msg = NULL;
-	}
 	if (iov_buf) {
 		MFREE(dhd->osh, iov_buf, WLC_IOCTL_SMLEN);
 		iov_buf = NULL;
@@ -12874,6 +12978,10 @@ done:
 		el_tag = NULL;
 	}
 #endif /* DHD_8021X_DUMP */
+	if (buf) {
+		MFREE(dhd->osh, buf, WLC_IOCTL_SMLEN);
+		buf = NULL;
+	}
 	return ret;
 }
 
