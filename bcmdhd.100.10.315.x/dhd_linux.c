@@ -110,7 +110,6 @@
 #ifdef RTT_SUPPORT
 #include <dhd_rtt.h>
 #endif // endif
-
 #ifdef CONFIG_COMPAT
 #include <linux/compat.h>
 #endif // endif
@@ -2644,7 +2643,6 @@ _dhd_set_mac_address(dhd_info_t *dhd, int ifidx, uint8 *addr)
 		memcpy(dhd->iflist[ifidx]->net->dev_addr, addr, ETHER_ADDR_LEN);
 		if (ifidx == 0)
 			memcpy(dhd->pub.mac.octet, addr, ETHER_ADDR_LEN);
-		DHD_ERROR(("%s: MACID is overwritten ifidx=%d, mac=%pM\n", __FUNCTION__, ifidx, addr));
 	}
 
 	return ret;
