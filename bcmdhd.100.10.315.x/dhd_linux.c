@@ -110,6 +110,7 @@
 #ifdef RTT_SUPPORT
 #include <dhd_rtt.h>
 #endif // endif
+
 #ifdef CONFIG_COMPAT
 #include <linux/compat.h>
 #endif // endif
@@ -12142,6 +12143,10 @@ void dhd_detach(dhd_pub_t *dhdp)
 
 			MFREE(dhd->pub.osh, ifp, sizeof(*ifp));
 			dhd->iflist[0] = NULL;
+#ifdef WL_CFG80211
+			if (cfg && cfg->wdev)
+				cfg->wdev->netdev = NULL;
+#endif // endif
 		}
 	}
 

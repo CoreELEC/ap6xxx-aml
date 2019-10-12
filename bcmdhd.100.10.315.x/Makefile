@@ -37,7 +37,7 @@ DHDCFLAGS = -Wall -Wstrict-prototypes -Dlinux -DBCMDRIVER                 \
 	-DMULTIPLE_SUPPLICANT -DTSQ_MULTIPLIER -DMFP                          \
 	-DPOWERUP_MAX_RETRY=0 -DIFACE_HANG_FORCE_DEV_CLOSE -DWAIT_DEQUEUE     \
 	-DWL_EXT_IAPSTA -DWL_ESCAN                                            \
-	-DENABLE_INSMOD_NO_FW_LOAD                                            \
+	-DENABLE_INSMOD_NO_FW_LOAD -DDHDENABLE_TAILPAD                                            \
 	-I$(src) -I$(src)/include
 
 DHDOFILES = aiutils.o siutils.o sbutils.o bcmutils.o bcmwifi_channels.o   \
@@ -151,7 +151,7 @@ endif
 ifeq ($(CONFIG_WL_EASYMESH),y)
 	DHDCFLAGS :=$(filter-out -DDHD_FW_COREDUMP,$(DHDCFLAGS))
 	DHDCFLAGS :=$(filter-out -DDHD_LOG_DUMP,$(DHDCFLAGS))
-DHDCFLAGS += -DWLEASYMESH -DWL_STATIC_IF -DWLDWDS -DFOURADDR_AUTO_BRG
+	DHDCFLAGS += -DWLEASYMESH -DWL_STATIC_IF -DWLDWDS -DFOURADDR_AUTO_BRG
 endif
 
 obj-$(CONFIG_BCMDHD) += $(MODULE_NAME).o

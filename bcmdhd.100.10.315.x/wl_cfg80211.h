@@ -507,6 +507,9 @@ enum wl_status {
 typedef enum wl_iftype {
 	WL_IF_TYPE_STA = 0,
 	WL_IF_TYPE_AP = 1,
+#ifdef WLMESH_CFG80211
+	WL_IF_TYPE_MESH = 2,
+#endif /* WLMESH_CFG80211 */
 	WL_IF_TYPE_NAN_NMI = 3,
 	WL_IF_TYPE_NAN = 4,
 	WL_IF_TYPE_P2P_GO = 5,
@@ -534,6 +537,9 @@ enum wl_mode {
 	WL_MODE_IBSS = 1,
 	WL_MODE_AP = 2,
 	WL_MODE_NAN = 4,
+#ifdef WLMESH_CFG80211
+	WL_MODE_MESH = 5,
+#endif /* WLMESH_CFG80211 */
 	WL_MODE_MAX
 };
 

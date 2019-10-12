@@ -7882,6 +7882,8 @@ dhd_bus_console_in(dhd_pub_t *dhdp, uchar *msg, uint msglen)
 		goto done;
 
 	if (!DATAOK(bus)) {
+		DHD_CTL(("%s: No bus credit bus->tx_max %d, bus->tx_seq %d, pktq_len %d\n",
+			__FUNCTION__, bus->tx_max, bus->tx_seq, pktq_n_pkts_tot(&bus->txq)));
 		rv = BCME_NOTREADY;
 		goto done;
 	}

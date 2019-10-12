@@ -1208,10 +1208,10 @@ osl_get_localtime(uint64 *sec, uint64 *usec)
 uint64
 osl_systztime_us(void)
 {
-	struct timeval tv;
+	struct osl_timespec tv;
 	uint64 tzusec;
 
-	do_gettimeofday(&tv);
+	osl_do_gettimeofday(&tv);
 	/* apply timezone */
 	tzusec = (uint64)((tv.tv_sec - (sys_tz.tz_minuteswest * 60)) *
 		USEC_PER_SEC);

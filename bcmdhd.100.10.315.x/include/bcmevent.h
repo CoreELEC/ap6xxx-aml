@@ -591,6 +591,9 @@ typedef struct wl_event_data_natoe {
 #define WLC_E_IF_ROLE_WDS		2	/* WDS link */
 #define WLC_E_IF_ROLE_P2P_GO		3	/* P2P Group Owner */
 #define WLC_E_IF_ROLE_P2P_CLIENT	4	/* P2P Client */
+#ifdef WLMESH_CFG80211
+#define WLC_E_IF_ROLE_MESH		5	/* MESH */
+#endif /* WLMESH_CFG80211 */
 #define WLC_E_IF_ROLE_IBSS		8	/* IBSS */
 #define WLC_E_IF_ROLE_NAN		9	/* NAN */
 

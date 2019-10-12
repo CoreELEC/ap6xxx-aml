@@ -194,7 +194,7 @@ typedef struct iscan_buf {
 
 typedef struct iscan_info {
 	struct net_device *dev;
-	struct timer_list timer;
+	timer_list_compat_t timer;
 	uint32 timer_ms;
 	uint32 timer_on;
 	int    iscan_state;
@@ -1533,7 +1533,7 @@ wl_iw_iscan_set_scan(
 		}
 	}
 #endif
-	return wl_escan_set_scan(dev, dhd, &ssid, TRUE);
+	return wl_escan_set_scan(dev, dhd, &ssid, 0, TRUE);
 #else
 	iscan = &wext_info->iscan;
 	WL_TRACE(("%s: SIOCSIWSCAN iscan=%p\n", dev->name, iscan));
@@ -4076,10 +4076,9 @@ done:
 
 #ifndef WL_ESCAN
 static void
-wl_iw_timerfunc(unsigned long data)
+wl_iw_timerfunc(ulong data)
 {
 	iscan_info_t *iscan = (iscan_info_t *)data;
-
 	iscan->timer_on = 0;
 	if (iscan->iscan_state != ISCAN_STATE_IDLE) {
 		WL_TRACE(("timer trigger\n"));
@@ -4357,7 +4356,7 @@ wl_iw_attach(struct net_device *dev, dhd_pub_t *dhdp)
 
 	/* Set up the timer */
 	iscan->timer_ms    = 2000;
-	init_timer_compat(&iscan->scan_timeout, wl_iw_timerfunc, iscan);
+	init_timer_compat(&iscan->timer, wl_iw_timerfunc, iscan);
 
 	sema_init(&iscan->sysioc_sem, 0);
 	init_completion(&iscan->sysioc_exited);

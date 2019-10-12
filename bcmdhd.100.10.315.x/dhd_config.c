@@ -1576,7 +1576,6 @@ dhd_conf_mkeep_alive(dhd_pub_t *dhd, int ifidx, int id, int period,
 	wl_mkeep_alive_pkt_t *mkeep_alive_pktp;
 	int ret = 0, len_bytes=0, buf_len=0;
 	char *buf = NULL, *iovar_buf = NULL;
-	struct ether_addr bssid;
 	uint8 *pdata;
 
 	CONFIG_TRACE("id=%d, period=%d, packet=%s\n", id, period, packet);
@@ -1597,17 +1596,11 @@ dhd_conf_mkeep_alive(dhd_pub_t *dhd, int ifidx, int id, int period,
 		mkeep_alive_pktp->keep_alive_id = id;
 		buf_len += WL_MKEEP_ALIVE_FIXED_LEN;
 		mkeep_alive_pktp->period_msec = period;
-		if (strlen(packet)) {
+		if (packet && strlen(packet)) {
 			len_bytes = wl_pattern_atoh(packet, (char *)mkeep_alive_pktp->data);
 			buf_len += len_bytes;
 			if (bcast) {
 				memcpy(mkeep_alive_pktp->data, &ether_bcast, ETHER_ADDR_LEN);
-			} else {
-				memset(&bssid, 0, ETHER_ADDR_LEN);
-				ret = dhd_wl_ioctl_cmd(dhd, WLC_GET_BSSID, &bssid, ETHER_ADDR_LEN,
-					FALSE, ifidx);
-				if (ret != BCME_NOTASSOCIATED && memcmp(&ether_null, &bssid, ETHER_ADDR_LEN))
-					memcpy(mkeep_alive_pktp->data, &bssid, ETHER_ADDR_LEN);
 			}
 			ret = dhd_conf_get_iovar(dhd, ifidx, WLC_GET_VAR, "cur_etheraddr",
 				iovar_buf, WLC_IOCTL_SMLEN);

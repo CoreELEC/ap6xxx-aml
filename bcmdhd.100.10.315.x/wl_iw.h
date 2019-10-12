@@ -109,7 +109,7 @@ typedef struct wl_iw {
 } wl_iw_t;
 
 struct wl_ctrl {
-	struct timer_list *timer;
+	timer_list_compat_t *timer;
 	struct net_device *dev;
 	long sysioc_pid;
 	struct semaphore sysioc_sem;

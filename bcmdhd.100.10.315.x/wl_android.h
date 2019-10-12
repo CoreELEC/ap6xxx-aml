@@ -136,6 +136,7 @@ void wl_ext_event_send(void *params, const wl_event_msg_t * e, void *data);
 int wl_android_ext_priv_cmd(struct net_device *net, char *command, int total_len,
 	int *bytes_written);
 void wl_ext_get_sec(struct net_device *dev, int ifmode, char *sec, int total_len);
+bool wl_ext_check_scan(struct net_device *dev, dhd_pub_t *dhdp);
 enum wl_ext_status {
 	WL_EXT_STATUS_DISCONNECTING = 0,
 	WL_EXT_STATUS_DISCONNECTED,

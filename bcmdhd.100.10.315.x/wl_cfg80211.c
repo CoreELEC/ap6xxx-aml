@@ -1417,6 +1417,13 @@ wl_cfg80211_ether_atoe(const char *a, struct ether_addr *n)
 /* There isn't a lot of sense in it, but you can transmit anything you like */
 static const struct ieee80211_txrx_stypes
 wl_cfg80211_default_mgmt_stypes[NUM_NL80211_IFTYPES] = {
+#ifdef WLMESH_CFG80211
+	[NL80211_IFTYPE_MESH_POINT] = {
+		.tx = 0xffff,
+		.rx = BIT(IEEE80211_STYPE_ACTION >> 4) |
+		BIT(IEEE80211_STYPE_AUTH >> 4)
+	},
+#endif /* WLMESH_CFG80211 */
 	[NL80211_IFTYPE_ADHOC] = {
 		.tx = 0xffff,
 		.rx = BIT(IEEE80211_STYPE_ACTION >> 4)
@@ -4307,6 +4314,11 @@ wl_iftype_to_mode(wl_iftype_t iftype)
 		case WL_IF_TYPE_IBSS:
 			mode = WL_MODE_IBSS;
 			break;
+#ifdef WLMESH_CFG80211
+		case WL_IF_TYPE_MESH:
+			mode = WL_MODE_MESH;
+			break;
+#endif /* WLMESH_CFG80211 */
 		default:
 			WL_ERR(("Unsupported type:%d\n", iftype));
 			break;
@@ -4353,6 +4365,12 @@ cfg80211_to_wl_iftype(uint16 type, uint16 *role, uint16 *mode)
 			*mode = WL_MODE_NAN;
 			break;
 #endif // endif
+#ifdef WLMESH_CFG80211
+		case NL80211_IFTYPE_MESH_POINT:
+			*role = WLC_E_IF_ROLE_AP;
+			*mode = WL_MODE_MESH;
+			break;
+#endif /* WLMESH_CFG80211 */
 		default:
 			WL_ERR(("Unknown interface type:0x%x\n", type));
 			return BCME_ERROR;
@@ -4402,6 +4420,12 @@ wl_role_to_cfg80211_type(uint16 role, uint16 *wl_iftype, uint16 *mode)
 		*mode = WL_MODE_AP;
 		return NL80211_IFTYPE_AP;
 #endif
+#ifdef WLMESH_CFG80211
+	case WLC_E_IF_ROLE_MESH:
+		*wl_iftype = WL_IF_TYPE_MESH;
+		*mode = WL_MODE_MESH;
+		return NL80211_IFTYPE_MESH_POINT;
+#endif /* WLMESH_CFG80211 */
 
 	default:
 		WL_ERR(("Unknown interface role:0x%x. Forcing type station\n", role));
@@ -4444,19 +4468,19 @@ wl_cfg80211_post_ifcreate(struct net_device *ndev,
 		return NULL;
 	}
 
+#if defined(WLMESH_CFG80211) && defined(WL_EXT_IAPSTA)
+	if (wl_ext_check_mesh_creating(ndev)) {
+		event->role = WLC_E_IF_ROLE_MESH;
+		WL_MSG(ndev->name, "change role to WLC_E_IF_ROLE_MESH\n");
+	}
+#endif /* WLMESH_CFG80211 && WL_EXT_IAPSTA */
+
 	iface_type = wl_role_to_cfg80211_type(event->role, &wl_iftype, &mode);
 	if (iface_type < 0) {
 		/* Unknown iface type */
 		WL_ERR(("Wrong iface type \n"));
 		return NULL;
 	}
-
-#ifdef WL_EXT_IAPSTA
-	if (wl_ext_check_mesh_creating(ndev)) {
-		WL_MSG(ndev->name, "change iface_type to NL80211_IFTYPE_MESH_POINT\n");
-		iface_type = NL80211_IFTYPE_MESH_POINT;
-	}
-#endif
 
 	WL_DBG(("mac_ptr:%p name:%s role:%d nl80211_iftype:%d " MACDBG "\n",
 		addr, name, event->role, iface_type, MAC2STRDBG(event->mac)));
@@ -10924,9 +10948,6 @@ wl_cfg80211_set_ap_role(
 	}
 
 	if (!ap) {
-#ifdef WLEASYMESH
-		WL_ERR(("ap should not be 0\n"));
-#endif
 		/* AP mode switch not supported. Try setting up AP explicitly */
 		err = wldev_iovar_getint(dev, "apsta", (s32 *)&apsta);
 		if (unlikely(err)) {
@@ -10934,9 +10955,6 @@ wl_cfg80211_set_ap_role(
 			return err;
 		}
 		if (apsta == 0) {
-#ifdef WLEASYMESH
-			WL_ERR(("apsta should not be 0\n"));
-#endif
 			/* If apsta is not set, set it */
 
 			/* Check for any connected interfaces before wl down */
@@ -11620,18 +11638,17 @@ wl_cfg80211_del_station(
 		} else
 #endif /* WL_WPS_SYNC */
 		{
-
+			scb_val.val = DOT11_RC_DEAUTH_LEAVING;
+			WL_MSG(dev->name, "Disconnect STA : " MACDBG " scb_val.val %d\n",
+				MAC2STRDBG(bcm_ether_ntoa((const struct ether_addr *)mac_addr,
+				eabuf)), scb_val.val);
 			/* need to guarantee EAP-Failure send out before deauth */
 			dhd_wait_pend8021x(dev);
-			scb_val.val = DOT11_RC_DEAUTH_LEAVING;
 			err = wldev_ioctl_set(dev, WLC_SCB_DEAUTHENTICATE_FOR_REASON, &scb_val,
 				sizeof(scb_val_t));
 			if (err < 0) {
 				WL_ERR(("WLC_SCB_DEAUTHENTICATE_FOR_REASON err %d\n", err));
 			}
-			WL_MSG(dev->name, "Disconnect STA : " MACDBG " scb_val.val %d\n",
-				MAC2STRDBG(bcm_ether_ntoa((const struct ether_addr *)mac_addr,
-				eabuf)), scb_val.val);
 		}
 #ifdef CUSTOM_BLOCK_DEAUTH_AT_EAP_FAILURE
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0))
@@ -12706,6 +12723,10 @@ s32 wl_mode_to_nl80211_iftype(s32 mode)
 		return NL80211_IFTYPE_ADHOC;
 	case WL_MODE_AP:
 		return NL80211_IFTYPE_AP;
+#ifdef WLMESH_CFG80211
+	case WL_MODE_MESH:
+		return NL80211_IFTYPE_MESH_POINT;
+#endif /* WLMESH_CFG80211 */
 	default:
 		return NL80211_IFTYPE_UNSPECIFIED;
 	}
@@ -12807,6 +12828,9 @@ static s32 wl_setup_wiphy(struct wireless_dev *wdev, struct device *sdiofunc_dev
 	wdev->wiphy->flags |= WIPHY_FLAG_SUPPORTS_SCHED_SCAN;
 #endif /* LINUX_VER < 4.12 */
 #endif /* WL_SCHED_SCAN */
+#ifdef WLMESH_CFG80211
+	wdev->wiphy->flags |= WIPHY_FLAG_MESH_AUTH;
+#endif /* WLMESH_CFG80211 */
 	wdev->wiphy->interface_modes =
 		BIT(NL80211_IFTYPE_STATION)
 		| BIT(NL80211_IFTYPE_ADHOC)
@@ -12820,6 +12844,9 @@ static s32 wl_setup_wiphy(struct wireless_dev *wdev, struct device *sdiofunc_dev
 #if defined(WL_CFG80211_P2P_DEV_IF)
 		| BIT(NL80211_IFTYPE_P2P_DEVICE)
 #endif /* WL_CFG80211_P2P_DEV_IF */
+#ifdef WLMESH_CFG80211
+		| BIT(NL80211_IFTYPE_MESH_POINT)
+#endif /* WLMESH_CFG80211 */
 		| BIT(NL80211_IFTYPE_AP);
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)) && \
@@ -13032,7 +13059,11 @@ static void wl_free_wdev(struct bcm_cfg80211 *cfg)
 
 	wl_delete_all_netinfo(cfg);
 	if (wiphy) {
+		if (wdev->netdev)
+			wdev->netdev->ieee80211_ptr = NULL;
+		wdev->netdev = NULL;
 		MFREE(cfg->osh, wdev, sizeof(*wdev));
+		cfg->wdev = NULL;
 		wiphy_free(wiphy);
 	}
 
@@ -13980,6 +14011,193 @@ wl_cache_assoc_resp_ies(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 	}
 }
 
+#ifdef WLMESH_CFG80211
+static s32
+wl_notify_connect_status_mesh(struct bcm_cfg80211 *cfg, struct net_device *ndev,
+	const wl_event_msg_t *e, void *data)
+{
+	s32 err = 0;
+	u32 event = ntoh32(e->event_type);
+	u32 reason = ntoh32(e->reason);
+	u32 len = ntoh32(e->datalen);
+	u32 status = ntoh32(e->status);
+
+#if !defined(WL_CFG80211_STA_EVENT) && !defined(WL_COMPAT_WIRELESS) && \
+	(LINUX_VERSION_CODE < KERNEL_VERSION(3, 2, 0))
+	bool isfree = false;
+	u8 *mgmt_frame;
+	u8 bsscfgidx = e->bsscfgidx;
+	s32 freq;
+	s32 channel;
+	u8 *body = NULL;
+	u16 fc = 0;
+	u32 body_len = 0;
+
+	struct ieee80211_supported_band *band;
+	struct ether_addr da;
+	struct ether_addr bssid;
+	struct wiphy *wiphy = bcmcfg_to_wiphy(cfg);
+	channel_info_t ci;
+	u8 ioctl_buf[WLC_IOCTL_SMLEN];
+#else
+	struct station_info sinfo;
+#endif /* (LINUX_VERSION < VERSION(3,2,0)) && !WL_CFG80211_STA_EVENT && !WL_COMPAT_WIRELESS */
+
+	WL_INFORM_MEM(("[%s] Mode Mesh. Event:%d status:%d reason:%d\n",
+		ndev->name, event, ntoh32(e->status), reason));
+
+	/* if link down, bsscfg is disabled. */
+	if (event == WLC_E_LINK && reason == WLC_E_LINK_BSSCFG_DIS &&
+			(ndev != bcmcfg_to_prmry_ndev(cfg))) {
+		WL_MSG(ndev->name, "Mesh mode link down !! \n");
+		return 0;
+	}
+
+	if ((event == WLC_E_LINK) && (status == WLC_E_STATUS_SUCCESS) &&
+			(reason == WLC_E_REASON_INITIAL_ASSOC)) {
+		/* AP/GO brought up successfull in firmware */
+		WL_MSG(ndev->name, "Mesh Link up\n");
+		return 0;
+	}
+
+	if (event == WLC_E_DISASSOC_IND || event == WLC_E_DEAUTH_IND || event == WLC_E_DEAUTH) {
+		WL_MSG(ndev->name, "event %s(%d) status %d reason %d\n",
+		bcmevent_get_name(event), event, ntoh32(e->status), reason);
+	}
+
+#if !defined(WL_CFG80211_STA_EVENT) && !defined(WL_COMPAT_WIRELESS) && \
+	(LINUX_VERSION_CODE < KERNEL_VERSION(3, 2, 0))
+	WL_DBG(("Enter \n"));
+	if (!len && (event == WLC_E_DEAUTH)) {
+		len = 2; /* reason code field */
+		data = &reason;
+	}
+	if (len) {
+		body = (u8 *)MALLOCZ(cfg->osh, len);
+		if (body == NULL) {
+			WL_ERR(("Failed to allocate body\n"));
+			return WL_INVALID;
+		}
+	}
+	bzero(&bssid, ETHER_ADDR_LEN);
+	WL_DBG(("Enter event %d ndev %p\n", event, ndev));
+	if (wl_get_mode_by_netdev(cfg, ndev) == WL_INVALID) {
+		MFREE(cfg->osh, body, len);
+		return WL_INVALID;
+	}
+	if (len)
+		memcpy(body, data, len);
+
+	wldev_iovar_getbuf_bsscfg(ndev, "cur_etheraddr",
+		NULL, 0, ioctl_buf, sizeof(ioctl_buf), bsscfgidx, NULL);
+	memcpy(da.octet, ioctl_buf, ETHER_ADDR_LEN);
+	bzero(&bssid, sizeof(bssid));
+	err = wldev_ioctl_get(ndev, WLC_GET_BSSID, &bssid, ETHER_ADDR_LEN);
+	switch (event) {
+		case WLC_E_ASSOC_IND:
+			fc = FC_ASSOC_REQ;
+			break;
+		case WLC_E_REASSOC_IND:
+			fc = FC_REASSOC_REQ;
+			break;
+		case WLC_E_DISASSOC_IND:
+			fc = FC_DISASSOC;
+			break;
+		case WLC_E_DEAUTH_IND:
+			fc = FC_DISASSOC;
+			break;
+		case WLC_E_DEAUTH:
+			fc = FC_DISASSOC;
+			break;
+		default:
+			fc = 0;
+			goto exit;
+	}
+	bzero(&ci, sizeof(ci));
+	if ((err = wldev_ioctl_get(ndev, WLC_GET_CHANNEL, &ci, sizeof(ci)))) {
+		MFREE(cfg->osh, body, len);
+		return err;
+	}
+
+	channel = dtoh32(ci.hw_channel);
+	if (channel <= CH_MAX_2G_CHANNEL)
+		band = wiphy->bands[IEEE80211_BAND_2GHZ];
+	else
+		band = wiphy->bands[IEEE80211_BAND_5GHZ];
+	if (!band) {
+		WL_ERR(("No valid band\n"));
+		if (body) {
+			MFREE(cfg->osh, body, len);
+		}
+		return -EINVAL;
+	}
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 39) && !defined(WL_COMPAT_WIRELESS)
+	freq = ieee80211_channel_to_frequency(channel);
+	(void)band->band;
+#else
+	freq = ieee80211_channel_to_frequency(channel, band->band);
+#endif // endif
+	body_len = len;
+	err = wl_frame_get_mgmt(cfg, fc, &da, &e->addr, &bssid,
+		&mgmt_frame, &len, body);
+	if (err < 0)
+		goto exit;
+	isfree = true;
+
+	if ((event == WLC_E_ASSOC_IND && reason == DOT11_SC_SUCCESS) ||
+			(event == WLC_E_DISASSOC_IND) ||
+			((event == WLC_E_DEAUTH_IND) || (event == WLC_E_DEAUTH))) {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0))
+		cfg80211_rx_mgmt(ndev, freq, 0, mgmt_frame, len, 0);
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 12, 0))
+		cfg80211_rx_mgmt(ndev, freq, 0, mgmt_frame, len, 0, GFP_ATOMIC);
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 4, 0)) || \
+		defined(WL_COMPAT_WIRELESS)
+		cfg80211_rx_mgmt(ndev, freq, 0, mgmt_frame, len, GFP_ATOMIC);
+#else
+		cfg80211_rx_mgmt(ndev, freq, mgmt_frame, len, GFP_ATOMIC);
+#endif /* LINUX_VERSION >= VERSION(3, 18,0) || WL_COMPAT_WIRELESS */
+	}
+
+exit:
+	if (isfree) {
+		MFREE(cfg->osh, mgmt_frame, len);
+	}
+	if (body) {
+		MFREE(cfg->osh, body, body_len);
+	}
+#else /* LINUX_VERSION < VERSION(3,2,0) && !WL_CFG80211_STA_EVENT && !WL_COMPAT_WIRELESS */
+	memset(&sinfo, 0, sizeof(struct station_info));
+	sinfo.filled = 0;
+	if (((event == WLC_E_ASSOC_IND) || (event == WLC_E_REASSOC_IND)) &&
+		reason == DOT11_SC_SUCCESS) {
+		/* Linux ver >= 4.0 assoc_req_ies_len is used instead of
+		 * STATION_INFO_ASSOC_REQ_IES flag
+		 */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0))
+		sinfo.filled = STA_INFO_BIT(INFO_ASSOC_REQ_IES);
+#endif /*  (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0)) */
+		if (!data) {
+			WL_ERR(("No IEs present in ASSOC/REASSOC_IND"));
+			return -EINVAL;
+		}
+		sinfo.assoc_req_ies = data;
+		sinfo.assoc_req_ies_len = len;
+		WL_MSG(ndev->name, "new sta event for "MACDBG "\n",
+			MAC2STRDBG(e->addr.octet));
+		cfg80211_new_sta(ndev, e->addr.octet, &sinfo, GFP_ATOMIC);
+	} else if ((event == WLC_E_DEAUTH_IND) ||
+		((event == WLC_E_DEAUTH) && (reason != DOT11_RC_RESERVED)) ||
+		(event == WLC_E_DISASSOC_IND)) {
+		WL_MSG(ndev->name, "del sta event for "MACDBG "\n",
+			MAC2STRDBG(e->addr.octet));
+		cfg80211_del_sta(ndev, e->addr.octet, GFP_ATOMIC);
+	}
+#endif /* LINUX_VERSION < VERSION(3,2,0) && !WL_CFG80211_STA_EVENT && !WL_COMPAT_WIRELESS */
+	return err;
+}
+#endif /* WLMESH_CFG80211 */
+
 static s32
 wl_notify_connect_status(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgdev,
 	const wl_event_msg_t *e, void *data)
@@ -14025,6 +14243,10 @@ wl_notify_connect_status(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgdev,
 		ntoh32(e->status),  ntoh32(e->reason)));
 	if (mode == WL_MODE_AP) {
 		err = wl_notify_connect_status_ap(cfg, ndev, e, data);
+#ifdef WLMESH_CFG80211
+	} else if (mode == WL_MODE_MESH) {
+		err = wl_notify_connect_status_mesh(cfg, ndev, e, data);
+#endif /* WLMESH_CFG80211 */
 	} else if (mode == WL_MODE_IBSS) {
 		err = wl_notify_connect_status_ibss(cfg, ndev, e, data);
 	} else if (mode == WL_MODE_BSS) {
@@ -15158,7 +15380,7 @@ wl_bss_roaming_done(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 	if ((*channel == cur_channel) && ((memcmp(curbssid, &e->addr,
 		ETHER_ADDR_LEN) == 0) || (memcmp(&cfg->last_roamed_addr,
 		&e->addr, ETHER_ADDR_LEN) == 0))) {
-		WL_ERR(("BSS already present, Skipping roamed event to"
+		WL_DBG(("BSS already present, Skipping roamed event to"
 		" upper layer\n"));
 		goto fail;
 	}
@@ -17173,7 +17395,11 @@ s32 wl_cfg80211_attach(struct net_device *ndev, void *context)
 		MFREE(dhd->osh, wdev, sizeof(*wdev));
 		return -ENOMEM;
 	}
+#ifdef WLMESH_CFG80211
+	wdev->iftype = wl_mode_to_nl80211_iftype(WL_MODE_MESH);
+#else
 	wdev->iftype = wl_mode_to_nl80211_iftype(WL_MODE_BSS);
+#endif
 	cfg = wiphy_priv(wdev->wiphy);
 	cfg->wdev = wdev;
 	cfg->pub = context;
@@ -17620,6 +17846,11 @@ static s32 wl_config_infra(struct bcm_cfg80211 *cfg, struct net_device *ndev, u1
 			/* Intentional fall through */
 			infra = 1;
 			break;
+#ifdef WLMESH_CFG80211
+	case NL80211_IFTYPE_MESH_POINT:
+		infra = WL_BSSTYPE_MESH;
+		break;
+#endif /* WLMESH_CFG80211 */
 		case WL_IF_TYPE_MONITOR:
 		case WL_IF_TYPE_NAN:
 			/* Intentionall fall through */
@@ -18528,6 +18759,9 @@ s32 wl_cfg80211_up(struct net_device *net)
 			return err;
 		}
 	}
+#ifdef WLMESH_CFG80211
+	cfg->wdev->wiphy->features |= NL80211_FEATURE_USERSPACE_MPM;
+#endif /* WLMESH_CFG80211 */
 #if defined(BCMSUP_4WAY_HANDSHAKE)
 	if (dhd->fw_4way_handshake) {
 		/* This is a hacky method to indicate fw 4WHS support and

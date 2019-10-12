@@ -3027,7 +3027,7 @@ wl_android_escan_autochannel(struct net_device *dev, uint32 band)
 					(retry_max - retry), ret));
 			} else {
 				escan->autochannel = 1;
-				ret = wl_escan_set_scan(dev, dhd, &ssid, TRUE);
+				ret = wl_escan_set_scan(dev, dhd, &ssid, 0, TRUE);
 				if (!ret)
 					break;
 			}
