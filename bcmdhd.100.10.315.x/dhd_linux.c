@@ -1249,11 +1249,11 @@ static int dhd_sysfs_init(dhd_info_t *dhd);
 static void dhd_sysfs_exit(dhd_info_t *dhd);
 
 #ifdef SHOW_LOGTRACE
-static char *logstrs_path = "/data/misc/wifi/logstrs.bin";
-char *st_str_file_path = "/data/misc/wifi/rtecdc.bin";
-static char *map_file_path = "/data/misc/wifi/rtecdc.map";
-static char *rom_st_str_file_path = "/data/misc/wifi/roml.bin";
-static char *rom_map_file_path = "/data/misc/wifi/roml.map";
+static char *logstrs_path = "/data/vendor/misc/wifi/logstrs.bin";
+char *st_str_file_path = "/data/vendor/misc/wifi/rtecdc.bin";
+static char *map_file_path = "/data/vendor/misc/wifi/rtecdc.map";
+static char *rom_st_str_file_path = "/data/vendor/misc/wifi/roml.bin";
+static char *rom_map_file_path = "/data/vendor/misc/wifi/roml.map";
 static char *ram_file_str = "rtecdc";
 static char *rom_file_str = "roml";
 
@@ -17349,7 +17349,7 @@ write_dump_to_file(dhd_pub_t *dhd, uint8 *buf, int size, char *fname)
 	osl_do_gettimeofday(&curtime);
 	dhd_convert_memdump_type_to_str(dhd->memdump_type, memdump_type, dhd->debug_dump_subcmd);
 	snprintf(memdump_path, sizeof(memdump_path), "%s%s_%s_%ld.%ld",
-		"/data/misc/wifi/", fname, memdump_type,
+		"/data/vendor/misc/wifi/", fname, memdump_type,
 		(unsigned long)curtime.tv_sec, (unsigned long)curtime.tv_usec);
 	file_mode = O_CREAT | O_WRONLY | O_SYNC;
 
@@ -18560,7 +18560,7 @@ int dhd_set_ap_isolate(dhd_pub_t *dhdp, uint32 idx, int val)
 #define MEMDUMPINFO_INST "/data/.memdump.info"
 #endif /* CONFIG_X86 && OEM_ANDROID */
 
-#define MEMDUMPINFO "/data/misc/wifi/.memdump.info"
+#define MEMDUMPINFO "/data/vendor/misc/wifi/.memdump.info"
 
 void dhd_get_memdump_info(dhd_pub_t *dhd)
 {
@@ -19475,7 +19475,7 @@ exit:
 #endif /* DHD_LOG_DUMP */
 
 #ifdef BCMASSERT_LOG
-#define ASSERTINFO "/data/misc/wifi/.assert.info"
+#define ASSERTINFO "/data/vendor/misc/wifi/.assert.info"
 void dhd_get_assert_info(dhd_pub_t *dhd)
 {
 	struct file *fp = NULL;
