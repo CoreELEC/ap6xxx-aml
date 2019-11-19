@@ -6512,6 +6512,7 @@ wl_android_set_wifi_on_flag(bool enable)
 #endif /* BT_OVER_SDIO */
 
 #ifdef WL_STATIC_IF
+#include <dhd_linux_priv.h>
 struct net_device *
 wl_cfg80211_register_static_if(struct bcm_cfg80211 *cfg, u16 iftype, char *ifname)
 {
@@ -6523,6 +6524,10 @@ wl_cfg80211_register_static_if(struct bcm_cfg80211 *cfg, u16 iftype, char *ifnam
 #ifdef DHD_USE_RANDMAC
 	struct ether_addr ea_addr;
 #endif /* DHD_USE_RANDMAC */
+#ifdef CUSTOM_MULTI_MAC
+	char hw_ether[62];
+	dhd_pub_t *dhd = cfg->pub;
+#endif
 
 	WL_INFORM_MEM(("[STATIC_IF] Enter (%s) iftype:%d\n", ifname, iftype));
 
@@ -6535,6 +6540,13 @@ wl_cfg80211_register_static_if(struct bcm_cfg80211 *cfg, u16 iftype, char *ifnam
 #ifdef DHD_USE_RANDMAC
 	dhd_generate_mac_addr(&ea_addr);
 	(void)memcpy_s(mac_addr, ETH_ALEN, ea_addr.octet, ETH_ALEN);
+#elif defined(CUSTOM_MULTI_MAC)
+	if (wifi_platform_get_mac_addr(dhd->info->adapter, hw_ether, "wlan1")) {
+		(void)memcpy_s(mac_addr, ETH_ALEN, primary_ndev->dev_addr, ETH_ALEN);
+		mac_addr[0] |= 0x02;
+	} else {
+		(void)memcpy_s(mac_addr, ETH_ALEN, hw_ether, ETH_ALEN);
+	}
 #else
 	/* Use primary mac with locally admin bit set */
 	(void)memcpy_s(mac_addr, ETH_ALEN, primary_ndev->dev_addr, ETH_ALEN);
@@ -6601,6 +6613,10 @@ wl_cfg80211_static_if_open(struct net_device *net)
 	struct net_device *primary_ndev = bcmcfg_to_prmry_ndev(cfg);
 	u16 iftype = net->ieee80211_ptr ? net->ieee80211_ptr->iftype : 0;
 	u16 wl_iftype, wl_mode;
+#ifdef CUSTOM_MULTI_MAC
+	char hw_ether[62];
+	dhd_pub_t *dhd = dhd_get_pub(net);
+#endif
 
 	WL_INFORM_MEM(("[STATIC_IF] dev_open ndev %p and wdev %p\n", net, net->ieee80211_ptr));
 	ASSERT(cfg->static_ndev == net);
@@ -6611,6 +6627,12 @@ wl_cfg80211_static_if_open(struct net_device *net)
 	if (cfg->static_ndev_state != NDEV_STATE_FW_IF_CREATED) {
 #ifdef DHD_USE_RANDMAC
 		wdev = wl_cfg80211_add_if(cfg, primary_ndev, wl_iftype, net->name, net->dev_addr);
+#elif defined(CUSTOM_MULTI_MAC)
+		if (wifi_platform_get_mac_addr(dhd->info->adapter, hw_ether, net->name)) {
+			wdev = wl_cfg80211_add_if(cfg, primary_ndev, wl_iftype, net->name, NULL);
+		} else {
+			wdev = wl_cfg80211_add_if(cfg, primary_ndev, wl_iftype, net->name, hw_ether);
+		}
 #else
 		wdev = wl_cfg80211_add_if(cfg, primary_ndev, wl_iftype, net->name, NULL);
 #endif // endif

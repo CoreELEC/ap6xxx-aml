@@ -247,6 +247,7 @@ MODULE_LICENSE("GPL and additional rights");
 DEFINE_MUTEX(_dhd_mutex_lock_);
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 25)) */
 #endif
+static int dhd_suspend_resume_helper(struct dhd_info *dhd, int val, int force);
 
 #ifdef CONFIG_BCM_DETECT_CONSECUTIVE_HANG
 #define MAX_CONSECUTIVE_HANG_COUNTS 5
@@ -874,15 +875,25 @@ static int dhd_pm_callback(struct notifier_block *nfb, unsigned long action, voi
 		break;
 	}
 
-#if defined(SUPPORT_P2P_GO_PS) && defined(PROP_TXSTATUS)
+	printf("%s: action=%ld, suspend=%d, suspend_mode=%d\n",
+		__FUNCTION__, action, suspend, dhdinfo->pub.conf->suspend_mode);
 	if (suspend) {
 		DHD_OS_WAKE_LOCK_WAIVE(&dhdinfo->pub);
+		if (dhdinfo->pub.conf->suspend_mode == PM_NOTIFIER)
+			dhd_suspend_resume_helper(dhdinfo, suspend, 0);
+#if defined(SUPPORT_P2P_GO_PS) && defined(PROP_TXSTATUS)
 		dhd_wlfc_suspend(&dhdinfo->pub);
+#endif /* defined(SUPPORT_P2P_GO_PS) && defined(PROP_TXSTATUS) */
+		dhd_conf_set_suspend_resume(&dhdinfo->pub, suspend, PM_NOTIFIER);
 		DHD_OS_WAKE_LOCK_RESTORE(&dhdinfo->pub);
 	} else {
+		dhd_conf_set_suspend_resume(&dhdinfo->pub, suspend, PM_NOTIFIER);
+#if defined(SUPPORT_P2P_GO_PS) && defined(PROP_TXSTATUS)
 		dhd_wlfc_resume(&dhdinfo->pub);
-	}
 #endif /* defined(SUPPORT_P2P_GO_PS) && defined(PROP_TXSTATUS) */
+		if (dhdinfo->pub.conf->suspend_mode == PM_NOTIFIER)
+			dhd_suspend_resume_helper(dhdinfo, suspend, 0);
+	}
 
 	dhd_mmc_suspend = suspend;
 	smp_mb();
@@ -1810,7 +1821,9 @@ dhd_packet_filter_add_remove(dhd_pub_t *dhdp, int add_remove, int num)
 
 static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 {
+#ifndef SUPPORT_PM2_ONLY
 	int power_mode = PM_MAX;
+#endif /* SUPPORT_PM2_ONLY */
 	/* wl_pkt_filter_enable_t	enable_parm; */
 	int bcn_li_dtim = 0; /* Default bcn_li_dtim in resume mode is 0 */
 	int ret = 0;
@@ -1822,7 +1835,7 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 	int roam_time_thresh = 0;   /* (ms) */
 #endif /* CUSTOM_ROAM_TIME_THRESH_IN_SUSPEND */
 #ifndef ENABLE_FW_ROAM_SUSPEND
-	uint roamvar = dhd->conf->roam_off_suspend;
+	uint roamvar = 1;
 #endif /* ENABLE_FW_ROAM_SUSPEND */
 #ifdef ENABLE_BCN_LI_BCN_WAKEUP
 	int bcn_li_bcn = 1;
@@ -1876,12 +1889,6 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 	/* set specific cpucore */
 	dhd_set_cpucore(dhd, TRUE);
 #endif /* CUSTOM_SET_CPUCORE */
-
-	if (dhd->conf->pm >= 0)
-		power_mode = dhd->conf->pm;
-	else
-		power_mode = PM_FAST;
-
 	if (dhd->up) {
 		if (value && dhd->in_suspend) {
 #ifdef PKT_FILTER_SUPPORT
@@ -1890,10 +1897,10 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 			/* Kernel suspended */
 			DHD_ERROR(("%s: force extra Suspend setting\n", __FUNCTION__));
 
-			if (dhd->conf->pm_in_suspend >= 0)
-				power_mode = dhd->conf->pm_in_suspend;
+#ifndef SUPPORT_PM2_ONLY
 			dhd_wl_ioctl_cmd(dhd, WLC_SET_PM, (char *)&power_mode,
 				sizeof(power_mode), TRUE, 0);
+#endif /* SUPPORT_PM2_ONLY */
 
 #ifdef PKT_FILTER_SUPPORT
 			/* Enable packet filter,
@@ -2096,7 +2103,9 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 			dhd->sroamed = FALSE;
 #endif /* CONFIG_SILENT_ROAM */
 #endif /* DHD_USE_EARLYSUSPEND */
+			dhd_conf_set_suspend_resume(dhd, value, EARLY_SUSPEND);
 		} else {
+			dhd_conf_set_suspend_resume(dhd, value, EARLY_SUSPEND);
 #ifdef PKT_FILTER_SUPPORT
 			dhd->early_suspended = 0;
 #endif // endif
@@ -2110,8 +2119,11 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 				DHD_ERROR(("failed to set intr_width (%d)\n", ret));
 			}
 #endif /* DYNAMIC_SWOOB_DURATION */
+#ifndef SUPPORT_PM2_ONLY
+			power_mode = PM_FAST;
 			dhd_wl_ioctl_cmd(dhd, WLC_SET_PM, (char *)&power_mode,
 				sizeof(power_mode), TRUE, 0);
+#endif /* SUPPORT_PM2_ONLY */
 #if defined(WL_CFG80211) && defined(WL_BCNRECV)
 			ret = wl_android_bcnrecv_resume(dhd_linux_get_primary_netdev(dhd));
 			if (ret != BCME_OK) {
@@ -8433,7 +8445,7 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen
 #endif /* DHD_DEBUG */
 
 #ifdef GET_CUSTOM_MAC_ENABLE
-	wifi_platform_get_mac_addr(dhd->adapter, hw_ether);
+	wifi_platform_get_mac_addr(dhd->adapter, hw_ether, iface_name);
 	bcopy(hw_ether, dhd->pub.mac.octet, sizeof(struct ether_addr));
 #endif /* GET_CUSTOM_MAC_ENABLE */
 #ifdef CUSTOM_FORCE_NODFS_FLAG
@@ -10072,7 +10084,7 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 
 #ifdef GET_CUSTOM_MAC_ENABLE
 	memset(hw_ether, 0, sizeof(hw_ether));
-	ret = wifi_platform_get_mac_addr(dhd->info->adapter, hw_ether);
+	ret = wifi_platform_get_mac_addr(dhd->info->adapter, hw_ether, iface_name);
 #ifdef GET_CUSTOM_MAC_FROM_CONFIG
 	if (!memcmp(&ether_null, &dhd->conf->hw_ether, ETHER_ADDR_LEN)) {
 		ret = 0;
@@ -11005,7 +11017,7 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	memset(buf, 0, sizeof(buf));
 	ret = dhd_iovar(dhd, 0, "clmver", NULL, 0, buf, sizeof(buf), FALSE);
 	if (ret < 0)
-		DHD_ERROR(("%s failed %d\n", __FUNCTION__, ret));
+		DHD_ERROR(("%s clmver failed %d\n", __FUNCTION__, ret));
 	else {
 		char *ver_temp_buf = NULL, *ver_date_buf = NULL;
 		int len;
@@ -11045,11 +11057,13 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 
 	/* query for 'wlc_ver' to get version info from firmware */
 	memset(&wlc_ver, 0, sizeof(wl_wlc_version_t));
-	ret = dhd_iovar(dhd, 0, "wlc_ver", NULL, 0, (char *)&wlc_ver,
+	ret2 = dhd_iovar(dhd, 0, "wlc_ver", NULL, 0, (char *)&wlc_ver,
 		sizeof(wl_wlc_version_t), FALSE);
-	if (ret < 0)
-		DHD_ERROR(("%s failed %d\n", __FUNCTION__, ret));
-	else {
+	if (ret2 < 0) {
+		DHD_ERROR(("%s wlc_ver failed %d\n", __FUNCTION__, ret2));
+		if (ret2 != BCME_UNSUPPORTED)
+			ret = ret2;
+	} else {
 		dhd->wlc_ver_major = wlc_ver.wlc_ver_major;
 		dhd->wlc_ver_minor = wlc_ver.wlc_ver_minor;
 	}
@@ -12146,7 +12160,7 @@ void dhd_detach(dhd_pub_t *dhdp)
 #ifdef WL_CFG80211
 			if (cfg && cfg->wdev)
 				cfg->wdev->netdev = NULL;
-#endif // endif
+#endif
 		}
 	}
 

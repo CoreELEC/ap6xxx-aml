@@ -2106,6 +2106,7 @@ s32 wl_notify_escan_complete(struct bcm_cfg80211 *cfg,
 	if (p2p_is_on(cfg))
 		wl_clr_p2p_status(cfg, SCANNING);
 	wl_clr_drv_status(cfg, SCANNING, dev);
+	wake_up_interruptible(&dhdp->conf->event_complete);
 
 	DHD_OS_SCAN_WAKE_UNLOCK((dhd_pub_t *)(cfg->pub));
 	DHD_ENABLE_RUNTIME_PM((dhd_pub_t *)(cfg->pub));

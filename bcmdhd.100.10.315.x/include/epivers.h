@@ -46,6 +46,6 @@
 #define EPI_VERSION_DEV		100.10.545
 
 /* Driver Version String, ASCII, 32 chars max */
-#define	EPI_VERSION_STR		"100.10.545.5 (r826445-20190922-1) (amlogic-20191015-3)"
+#define	EPI_VERSION_STR		"100.10.545.6 (r826445-20191105-2)(20191119-1)"
 
 #endif /* _epivers_h_ */

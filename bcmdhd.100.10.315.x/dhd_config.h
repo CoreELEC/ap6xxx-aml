@@ -86,16 +86,18 @@ typedef struct conf_pkt_filter_del {
 } conf_pkt_filter_del_t;
 #endif
 
-#define CONFIG_COUNTRY_LIST_SIZE 100
-typedef struct conf_country_list {
-	wl_country_t *cspec[CONFIG_COUNTRY_LIST_SIZE];
-} conf_country_list_t;
+#define CONFIG_COUNTRY_LIST_SIZE 500
+typedef struct country_list {
+	struct country_list *next;
+	wl_country_t cspec;
+} country_list_t;
 
 /* mchan_params */
 #define MCHAN_MAX_NUM 4
 #define MIRACAST_SOURCE	1
 #define MIRACAST_SINK	2
 typedef struct mchan_params {
+	struct mchan_params *next;
 	int bw;
 	int p2p_mode;
 	int miracast_mode;
@@ -117,6 +119,12 @@ enum in_suspend_flags {
 	AP_FILTER_IN_SUSPEND	= (1 << (5)),
 	WOWL_IN_SUSPEND			= (1 << (6)),
 	ALL_IN_SUSPEND 			= 0xFFFFFFFF,
+};
+
+enum in_suspend_mode {
+	AUTO_SUSPEND = -1,
+	EARLY_SUSPEND = 0,
+	PM_NOTIFIER = 1
 };
 
 enum eapol_status {
@@ -152,7 +160,7 @@ typedef struct dhd_conf {
 	wl_mac_list_ctrl_t nv_by_mac;
 #endif
 	wl_chip_nv_path_list_ctrl_t nv_by_chip;
-	conf_country_list_t country_list;
+	country_list_t *country_head;
 	int band;
 	int bw_cap[2];
 	wl_country_t cspec;
@@ -218,6 +226,7 @@ typedef struct dhd_conf {
 	bool deepsleep;
 	int pm;
 	int pm_in_suspend;
+	int suspend_mode;
 	int suspend_bcn_li_dtim;
 #ifdef DHDTCPACK_SUPPRESS
 	uint8 tcpack_sup_mode;
@@ -244,7 +253,7 @@ typedef struct dhd_conf {
 	char isam_enable[50];
 #endif
 	int ctrl_resched;
-	struct mchan_params mchan[MCHAN_MAX_NUM];
+	mchan_params_t *mchan;
 	char *wl_preinit;
 	int tsq;
 	int orphan_move;
@@ -256,6 +265,7 @@ typedef struct dhd_conf {
 #ifdef GET_CUSTOM_MAC_FROM_CONFIG
 	char hw_ether[62];
 #endif
+	wait_queue_head_t event_complete;
 } dhd_conf_t;
 
 #ifdef BCMSDIO
@@ -299,7 +309,7 @@ void dhd_conf_set_garp(dhd_pub_t *dhd, int ifidx, uint32 ipa, bool enable);
 int dhd_conf_get_disable_proptx(dhd_pub_t *dhd);
 #endif
 uint dhd_conf_get_insuspend(dhd_pub_t *dhd, uint mask);
-int dhd_conf_set_suspend_resume(dhd_pub_t *dhd, int suspend);
+int dhd_conf_set_suspend_resume(dhd_pub_t *dhd, int suspend, int suspend_mode);
 void dhd_conf_postinit_ioctls(dhd_pub_t *dhd);
 int dhd_conf_preinit(dhd_pub_t *dhd);
 int dhd_conf_reset(dhd_pub_t *dhd);
@@ -307,4 +317,7 @@ int dhd_conf_attach(dhd_pub_t *dhd);
 void dhd_conf_detach(dhd_pub_t *dhd);
 void *dhd_get_pub(struct net_device *dev);
 int wl_pattern_atoh(char *src, char *dst);
+#ifdef BCMSDIO
+extern int dhd_bus_sleep(dhd_pub_t *dhdp, bool sleep, uint32 *intstatus);
+#endif
 #endif /* _dhd_config_ */

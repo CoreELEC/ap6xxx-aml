@@ -447,9 +447,6 @@ wl_ext_ch_to_chanspec(int ioctl_ver, int ch,
 
 		join_params->params.chanspec_num =
 			htod32(join_params->params.chanspec_num);
-		AEXT_ERROR("wlan", "join_params->params.chanspec_list[0]= %X, %d channels\n",
-			join_params->params.chanspec_list[0],
-			join_params->params.chanspec_num);
 	}
 }
 
@@ -527,6 +524,79 @@ wl_ext_check_scan(struct net_device *dev, dhd_pub_t *dhdp)
 
 	return FALSE;
 }
+
+#if defined(WL_CFG80211) || defined(WL_ESCAN)
+void
+wl_ext_user_sync(struct dhd_pub *dhd, int ifidx, bool lock)
+{
+	struct net_device *dev = dhd_idx2net(dhd, ifidx);
+#ifdef WL_CFG80211
+	struct bcm_cfg80211 *cfg = wl_get_cfg(dev);
+#endif /* WL_CFG80211 */
+#ifdef WL_ESCAN
+	struct wl_escan_info *escan = dhd->escan;
+#endif /* WL_ESCAN */
+
+	AEXT_INFO(dev->name, "lock=%d\n", lock);
+
+	if (lock) {
+#if defined(WL_CFG80211)
+		mutex_lock(&cfg->usr_sync);
+#endif
+#if defined(WL_ESCAN)
+		mutex_lock(&escan->usr_sync);
+#endif
+	} else {
+#if defined(WL_CFG80211)
+		mutex_unlock(&cfg->usr_sync);
+#endif
+#if defined(WL_ESCAN)
+		mutex_unlock(&escan->usr_sync);
+#endif
+	}
+}
+
+bool
+wl_ext_event_complete(struct dhd_pub *dhd, int ifidx)
+{
+	struct net_device *dev = dhd_idx2net(dhd, ifidx);
+#ifdef WL_CFG80211
+	struct bcm_cfg80211 *cfg = wl_get_cfg(dev);
+#endif /* WL_CFG80211 */
+#ifdef WL_ESCAN
+	struct wl_escan_info *escan = dhd->escan;
+#endif /* WL_ESCAN */
+	bool complete = TRUE;
+
+#ifdef WL_CFG80211
+	if (wl_get_drv_status_all(cfg, SCANNING)) {
+		AEXT_INFO(dev->name, "SCANNING\n");
+		complete = FALSE;
+	}
+	if (wl_get_drv_status_all(cfg, CONNECTING)) {
+		AEXT_INFO(dev->name, "CONNECTING\n");
+		complete = FALSE;
+	}
+	if (wl_get_drv_status_all(cfg, DISCONNECTING)) {
+		AEXT_INFO(dev->name, "DISCONNECTING\n");
+		complete = FALSE;
+	}
+#endif /* WL_CFG80211 */
+#ifdef WL_ESCAN
+	if (escan->escan_state == ESCAN_STATE_SCANING) {
+		AEXT_INFO(dev->name, "ESCAN_STATE_SCANING\n");
+		complete = FALSE;
+	}
+#endif /* WL_ESCAN */
+	if (dhd->conf->eapol_status >= EAPOL_STATUS_4WAY_START &&
+			dhd->conf->eapol_status < EAPOL_STATUS_4WAY_DONE) {
+		AEXT_INFO(dev->name, "4-WAY handshaking\n");
+		complete = FALSE;
+	}
+
+	return complete;
+}
+#endif /* WL_CFG80211 && WL_ESCAN */
 
 static int
 wl_ext_get_ioctl_ver(struct net_device *dev, int *ioctl_ver)
@@ -804,6 +874,8 @@ wl_ext_connect(struct net_device *dev, struct wl_conn_info *conn_info)
 	int ioctl_ver = 0;
 	char sec[32];
 
+	wl_ext_get_ioctl_ver(dev, &ioctl_ver);
+
 	if (dhd->conf->chip == BCM43362_CHIP_ID)
 		goto set_ssid;
 
@@ -828,7 +900,6 @@ wl_ext_connect(struct net_device *dev, struct wl_conn_info *conn_info)
 		err = -ENOMEM;
 		goto exit;
 	}
-	wl_ext_get_ioctl_ver(dev, &ioctl_ver);
 	ext_join_params->ssid.SSID_len = min((uint32)sizeof(ext_join_params->ssid.SSID),
 		conn_info->ssid.SSID_len);
 	memcpy(&ext_join_params->ssid.SSID, conn_info->ssid.SSID, ext_join_params->ssid.SSID_len);
@@ -908,7 +979,7 @@ set_ssid:
 		"Connecting with %pM channel (%d) ssid \"%s\", len (%d), sec=%s\n\n",
 		&join_params.params.bssid, conn_info->channel,
 		join_params.ssid.SSID, join_params.ssid.SSID_len, sec);
-	err = wl_ext_ioctl(dev, WLC_SET_SSID, &join_params,join_params_size, 1);
+	err = wl_ext_ioctl(dev, WLC_SET_SSID, &join_params, join_params_size, 1);
 
 exit:
 	if (iovar_buf)
@@ -922,61 +993,70 @@ exit:
 void
 wl_ext_get_sec(struct net_device *dev, int ifmode, char *sec, int total_len)
 {
-	int auth=-1, wpa_auth=-1, wsec=0;
+	int auth=-1, wpa_auth=-1, wsec=0, mfp=0;
 	int bytes_written=0;
 
 	memset(sec, 0, total_len);
 	wl_ext_iovar_getint(dev, "auth", &auth);
 	wl_ext_iovar_getint(dev, "wpa_auth", &wpa_auth);
 	wl_ext_iovar_getint(dev, "wsec", &wsec);
+	wldev_iovar_getint(dev, "mfp", &mfp);
 
-#if defined(WL_EXT_IAPSTA) && defined(WLMESH)
 	if (ifmode == IMESH_MODE) {
-		if (auth == 0 && wpa_auth == 0) {
+		if (auth == WL_AUTH_OPEN_SYSTEM && wpa_auth == WPA_AUTH_DISABLED) {
 			bytes_written += snprintf(sec+bytes_written, total_len, "open");
-		} else if (auth == 0 && wpa_auth == 128) {
+		} else if (auth == WL_AUTH_OPEN_SYSTEM && wpa_auth == WPA2_AUTH_PSK) {
 			bytes_written += snprintf(sec+bytes_written, total_len, "sae");
 		} else {
 			bytes_written += snprintf(sec+bytes_written, total_len, "unknown");
 		}
-	} else
-#endif /* WL_EXT_IAPSTA && WLMESH */
-	if (auth == 0 && wpa_auth == 0) {
-		bytes_written += snprintf(sec+bytes_written, total_len, "open");
-	} else if (auth == 1 && wpa_auth == 0) {
-		bytes_written += snprintf(sec+bytes_written, total_len, "shared");
-	} else if (auth == 0 && wpa_auth == 4) {
-		bytes_written += snprintf(sec+bytes_written, total_len, "wpapsk");
-	} else if (auth == 0 && wpa_auth == 128) {
-		bytes_written += snprintf(sec+bytes_written, total_len, "wpa2psk");
-	} else if (auth == 0 && wpa_auth == 132) {
-		bytes_written += snprintf(sec+bytes_written, total_len, "wpawpa2psk");
 	} else {
-		bytes_written += snprintf(sec+bytes_written, total_len, "(%d/%d)",
-			auth, wpa_auth);
+		if (auth == WL_AUTH_OPEN_SYSTEM && wpa_auth == WPA_AUTH_DISABLED) {
+			bytes_written += snprintf(sec+bytes_written, total_len, "open");
+		} else if (auth == WL_AUTH_SHARED_KEY && wpa_auth == WPA_AUTH_DISABLED) {
+			bytes_written += snprintf(sec+bytes_written, total_len, "shared");
+		} else if (auth == WL_AUTH_OPEN_SYSTEM && wpa_auth == WPA_AUTH_PSK) {
+			bytes_written += snprintf(sec+bytes_written, total_len, "wpapsk");
+		} else if (auth == WL_AUTH_OPEN_SYSTEM && wpa_auth == WPA2_AUTH_PSK) {
+			bytes_written += snprintf(sec+bytes_written, total_len, "wpa2psk");
+		} else if (auth == WL_AUTH_OPEN_SYSTEM &&
+				wpa_auth == (WPA_AUTH_PSK|WPA2_AUTH_PSK)) {
+			bytes_written += snprintf(sec+bytes_written, total_len, "wpawpa2psk");
+		} else if (auth == WL_AUTH_OPEN_SHARED && wpa_auth == WPA3_AUTH_SAE_PSK) {
+			bytes_written += snprintf(sec+bytes_written, total_len, "wpa3");
+		} else {
+			bytes_written += snprintf(sec+bytes_written, total_len, "(%d/%d)",
+				auth, wpa_auth);
+		}
+	}
+	
+	if (mfp == WL_MFP_CAPABLE) {
+		bytes_written += snprintf(sec+bytes_written, total_len, "/mfpc");
+	} else if (mfp == WL_MFP_REQUIRED) {
+		bytes_written += snprintf(sec+bytes_written, total_len, "/mfpr");
 	}
 
-#if defined(WL_EXT_IAPSTA) && defined(WLMESH)
 	if (ifmode == IMESH_MODE) {
 		if (wsec == 0) {
 			bytes_written += snprintf(sec+bytes_written, total_len, "/none");
 		} else {
 			bytes_written += snprintf(sec+bytes_written, total_len, "/sae");
 		}
-	} else
-#endif /* WL_EXT_IAPSTA && WLMESH */
-	if (wsec == 0) {
-		bytes_written += snprintf(sec+bytes_written, total_len, "/none");
-	} else if (wsec == 1) {
-		bytes_written += snprintf(sec+bytes_written, total_len, "/wep");
-	} else if (wsec == 2 || wsec == 10) {
-		bytes_written += snprintf(sec+bytes_written, total_len, "/tkip");
-	} else if (wsec == 4 || wsec == 12) {
-		bytes_written += snprintf(sec+bytes_written, total_len, "/aes");
-	} else if (wsec == 6 || wsec == 14) {
-		bytes_written += snprintf(sec+bytes_written, total_len, "/tkipaes");
 	} else {
-		bytes_written += snprintf(sec+bytes_written, total_len, "/%d", wsec);
+		if (wsec == 0) {
+			bytes_written += snprintf(sec+bytes_written, total_len, "/none");
+		} else if (wsec == WEP_ENABLED) {
+			bytes_written += snprintf(sec+bytes_written, total_len, "/wep");
+		} else if (wsec == TKIP_ENABLED || wsec == (TKIP_ENABLED|WSEC_SWFLAG)) {
+			bytes_written += snprintf(sec+bytes_written, total_len, "/tkip");
+		} else if (wsec == AES_ENABLED || wsec == (AES_ENABLED|WSEC_SWFLAG)) {
+			bytes_written += snprintf(sec+bytes_written, total_len, "/aes");
+		} else if (wsec == (TKIP_ENABLED|AES_ENABLED) ||
+				wsec == (TKIP_ENABLED|AES_ENABLED|WSEC_SWFLAG)) {
+			bytes_written += snprintf(sec+bytes_written, total_len, "/tkipaes");
+		} else {
+			bytes_written += snprintf(sec+bytes_written, total_len, "/%d", wsec);
+		}
 	}
 }
 

@@ -10481,3 +10481,31 @@ dhd_bus_get_bus_wake(dhd_pub_t *dhd)
 	return bcmsdh_set_get_wake(dhd->bus->sdh, 0);
 }
 #endif /* DHD_WAKE_STATUS */
+
+int
+dhd_bus_sleep(dhd_pub_t *dhdp, bool sleep, uint32 *intstatus)
+{
+	dhd_bus_t *bus = dhdp->bus;
+	uint32 retry = 0;
+	int ret = 0;
+
+	if (bus) {
+		dhd_os_sdlock(dhdp);
+		BUS_WAKE(bus);
+		R_SDREG(*intstatus, &bus->regs->intstatus, retry);
+		if (sleep) {
+			if (SLPAUTO_ENAB(bus)) {
+				ret = dhdsdio_bussleep(bus, sleep);
+				if (ret != BCME_BUSY)
+					dhd_os_wd_timer(bus->dhd, 0);
+			} else
+				dhdsdio_clkctl(bus, CLK_NONE, FALSE);
+		}
+		dhd_os_sdunlock(dhdp);
+	} else {
+		DHD_ERROR(("bus is NULL\n"));
+		ret = -1;
+	}
+
+	return ret;
+}

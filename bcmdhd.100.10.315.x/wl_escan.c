@@ -340,6 +340,7 @@ wl_escan_notify_complete(struct net_device *dev,
 	char extra[IW_CUSTOM_MAX + 1];
 #endif
 #endif
+	struct dhd_pub *dhd = dhd_get_pub(dev);
 
 	ESCAN_TRACE(dev->name, "Enter\n");
 
@@ -355,6 +356,7 @@ wl_escan_notify_complete(struct net_device *dev,
 #endif /* ESCAN_RESULT_PATCH */
 
 	escan->escan_state = ESCAN_STATE_IDLE;
+	wake_up_interruptible(&dhd->conf->event_complete);
 
 #if defined(WL_WIRELESS_EXT)
 #if WIRELESS_EXT > 13

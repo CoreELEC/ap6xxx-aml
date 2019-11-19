@@ -632,6 +632,7 @@ wl_iw_update_connect_status(struct net_device *dev, enum wl_ext_status status)
 			dhd->conf->eapol_status = EAPOL_STATUS_NONE;
 	} else if (status == WL_EXT_STATUS_ADD_KEY) {
 		dhd->conf->eapol_status = EAPOL_STATUS_4WAY_DONE;
+		wake_up_interruptible(&dhd->conf->event_complete);
 	} else if (status == WL_EXT_STATUS_DISCONNECTING) {
 		wl_ext_add_remove_pm_enable_work(wext_info, FALSE);
 		if (cur_eapol_status >= EAPOL_STATUS_4WAY_START &&
@@ -648,6 +649,7 @@ wl_iw_update_connect_status(struct net_device *dev, enum wl_ext_status status)
 				cur_eapol_status < EAPOL_STATUS_4WAY_DONE) {
 			WL_ERROR(("WPA failed at %d\n", cur_eapol_status));
 			dhd->conf->eapol_status = EAPOL_STATUS_NONE;
+			wake_up_interruptible(&dhd->conf->event_complete);
 		} else if (cur_eapol_status >= EAPOL_STATUS_WSC_START &&
 				cur_eapol_status < EAPOL_STATUS_WSC_DONE) {
 			WL_ERROR(("WPS failed at %d\n", cur_eapol_status));

@@ -12985,7 +12985,7 @@ static s32 wl_setup_wiphy(struct wireless_dev *wdev, struct device *sdiofunc_dev
 	wiphy_ext_feature_set(wdev->wiphy, NL80211_EXT_FEATURE_FILS_SK_OFFLOAD);
 #endif /* WL_FILS */
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 12, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 17, 0))
 	wdev->wiphy->flags |= WIPHY_FLAG_HAS_CHANNEL_SWITCH;
 	wdev->wiphy->max_num_csa_counters = WL_MAX_NUM_CSA_COUNTERS;
 #endif /* LINUX_VERSION_CODE > KERNEL_VERSION(3, 12, 0) */
@@ -15721,6 +15721,14 @@ wl_bss_connect_done(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 			completed = false;
 			sec->auth_assoc_res_status = WLAN_STATUS_UNSPECIFIED_FAILURE;
 		}
+		if (completed) {
+			WL_MSG(ndev->name, "Report connect result - connection succeeded\n");
+			wl_cfg80211_check_in4way(cfg, ndev, 0, WL_EXT_STATUS_CONNECTED, NULL);
+		} else {
+			WL_MSG(ndev->name, "Report connect result - connection failed\n");
+			wl_cfg80211_check_in4way(cfg, ndev, NO_SCAN_IN4WAY|NO_BTC_IN4WAY|WAIT_DISCONNECTED,
+				WL_EXT_STATUS_DISCONNECTED, NULL);
+		}
 #ifdef WL_FILS
 		if ((sec->auth_type == DOT11_FILS_SKEY_PFS)||(sec->auth_type == DOT11_FILS_SKEY)) {
 			wl_get_fils_connect_params(cfg, ndev);
@@ -15772,15 +15780,6 @@ wl_bss_connect_done(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 				sec->auth_assoc_res_status :
 				WLAN_STATUS_UNSPECIFIED_FAILURE,
 				GFP_KERNEL);
-		}
-		if (completed) {
-			WL_MSG(ndev->name, "Report connect result - "
-				"connection succeeded\n");
-			wl_cfg80211_check_in4way(cfg, ndev, 0, WL_EXT_STATUS_CONNECTED, NULL);
-		} else {
-			WL_MSG(ndev->name, "Report connect result - connection failed\n");
-			wl_cfg80211_check_in4way(cfg, ndev, NO_SCAN_IN4WAY|NO_BTC_IN4WAY|WAIT_DISCONNECTED,
-				WL_EXT_STATUS_DISCONNECTED, NULL);
 		}
 	} else {
 		WL_INFORM_MEM(("[%s] Ignore event:%d. drv status"
@@ -24437,6 +24436,7 @@ wl_cfg80211_check_in4way(struct bcm_cfg80211 *cfg,
 					mutex_lock(&cfg->in4way_sync);
 					max_wait_cnt--;
 				}
+				wake_up_interruptible(&dhdp->conf->event_complete);
 			}
 			break;
 		case WL_EXT_STATUS_CONNECTING:
@@ -24470,12 +24470,14 @@ wl_cfg80211_check_in4way(struct bcm_cfg80211 *cfg,
 					mutex_lock(&cfg->in4way_sync);
 					max_wait_cnt--;
 				}
+				wake_up_interruptible(&dhdp->conf->event_complete);
 			}
 			break;
 		case WL_EXT_STATUS_CONNECTED:
 			ifidx = dhd_net2idx(dhdp->info, dev);
 			if (dev->ieee80211_ptr->iftype == NL80211_IFTYPE_STATION && ifidx >= 0) {
 				dhd_conf_set_wme(cfg->pub, ifidx, 0);
+				wake_up_interruptible(&dhdp->conf->event_complete);
 			}
 			else if (dev->ieee80211_ptr->iftype == NL80211_IFTYPE_P2P_CLIENT) {
 				dhd_conf_set_mchan_bw(cfg->pub, WL_P2P_IF_CLIENT, -1);
@@ -24504,6 +24506,7 @@ wl_cfg80211_check_in4way(struct bcm_cfg80211 *cfg,
 			if (action & WAIT_DISCONNECTED) {
 				cfg->disconnected_jiffies = jiffies;
 			}
+			wake_up_interruptible(&dhdp->conf->event_complete);
 			break;
 		case WL_EXT_STATUS_ADD_KEY:
 			dhdp->conf->eapol_status = EAPOL_STATUS_4WAY_DONE;
@@ -24517,6 +24520,7 @@ wl_cfg80211_check_in4way(struct bcm_cfg80211 *cfg,
 					cfg->handshaking = 0;
 				}
 			}
+			wake_up_interruptible(&dhdp->conf->event_complete);
 			break;
 		case WL_EXT_STATUS_AP_ENABLED:
 			ifidx = dhd_net2idx(dhdp->info, dev);

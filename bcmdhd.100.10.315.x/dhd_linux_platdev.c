@@ -282,7 +282,8 @@ int wifi_platform_bus_enumerate(wifi_adapter_info_t *adapter, bool device_presen
 
 }
 
-int wifi_platform_get_mac_addr(wifi_adapter_info_t *adapter, unsigned char *buf)
+int wifi_platform_get_mac_addr(wifi_adapter_info_t *adapter, unsigned char *buf,
+	char *name)
 {
 	struct wifi_platform_data *plat_data;
 
@@ -291,7 +292,11 @@ int wifi_platform_get_mac_addr(wifi_adapter_info_t *adapter, unsigned char *buf)
 		return -EINVAL;
 	plat_data = adapter->wifi_plat_data;
 	if (plat_data->get_mac_addr) {
+#ifdef CUSTOM_MULTI_MAC
+		return plat_data->get_mac_addr(buf, name);
+#else
 		return plat_data->get_mac_addr(buf);
+#endif
 	}
 	return -EOPNOTSUPP;
 }
