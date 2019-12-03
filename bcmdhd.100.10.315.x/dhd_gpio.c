@@ -191,6 +191,7 @@ static int dhd_wlan_get_mac_addr(unsigned char *buf
 	/* EXAMPLE code */
 #ifdef CUSTOM_MULTI_MAC
 	if (!strcmp("wlan1", name)) {
+#ifdef CUSTOM_AP_MAC
 		bcopy((char *)wifi_get_ap_mac(), buf, sizeof(struct ether_addr));
 		if (buf[0] == 0xff) {
 			printf("custom wifi ap mac is not set\n");
@@ -199,6 +200,9 @@ static int dhd_wlan_get_mac_addr(unsigned char *buf
 			printf("custom wifi ap mac-addr: %02x:%02x:%02x:%02x:%02x:%02x\n",
 				buf[0], buf[1], buf[2],
 				buf[3], buf[4], buf[5]);
+#else
+		err = -1;
+#endif
 	} else
 #endif
 	{
