@@ -13232,6 +13232,10 @@ dhd_get_wireless_stats(struct net_device *dev)
 		return NULL;
 	}
 
+	if (!netif_running(dev)) {
+		return NULL;
+	}
+
 	res = wl_iw_get_wireless_stats(dev, &dhd->iw.wstats);
 
 	if (res == 0)
