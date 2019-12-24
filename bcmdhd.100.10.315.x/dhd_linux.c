@@ -894,10 +894,11 @@ static int dhd_pm_callback(struct notifier_block *nfb, unsigned long action, voi
 		if (dhdinfo->pub.conf->suspend_mode == PM_NOTIFIER)
 			dhd_suspend_resume_helper(dhdinfo, suspend, 0);
 	}
-
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && (LINUX_VERSION_CODE <= \
+        KERNEL_VERSION(2, 6, 39))
 	dhd_mmc_suspend = suspend;
 	smp_mb();
-
+#endif
 	return ret;
 }
 
