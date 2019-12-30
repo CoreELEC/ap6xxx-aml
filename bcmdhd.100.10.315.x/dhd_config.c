@@ -96,6 +96,7 @@ const cihp_name_map_t chip_name_map[] = {
 	{BCM43430_CHIP_ID,	2,	DONT_CARE,	"bcm43436b0",		"ap6236"},
 	{BCM43012_CHIP_ID,	1,	FW_TYPE_G,	"bcm43013b0",		""},
 	{BCM43012_CHIP_ID,	1,	FW_TYPE_AG,	"bcm43013c0_ag",	""},
+	{BCM43012_CHIP_ID,	2,	DONT_CARE,	"bcm43013c1_ag",	""},
 	{BCM4334_CHIP_ID,	3,	DONT_CARE,	"bcm4334b1_ag",		""},
 	{BCM43340_CHIP_ID,	2,	DONT_CARE,	"bcm43341b0_ag",	""},
 	{BCM43341_CHIP_ID,	2,	DONT_CARE,	"bcm43341b0_ag",	""},
@@ -495,7 +496,7 @@ dhd_conf_set_fw_name_by_chip(dhd_pub_t *dhd, char *fw_path)
 		}
 	}
 #ifndef FW_PATH_AUTO_SELECT
-	return;
+	return DONT_CARE;
 #endif
 
 	/* find out the last '/' */
@@ -1092,7 +1093,7 @@ dhd_conf_set_bw_cap(dhd_pub_t *dhd)
 		param.bw_cap = (uint)dhd->conf->bw_cap[0];
 		CONFIG_MSG("set bw_cap 2g 0x%x\n", param.bw_cap);
 		dhd_conf_set_bufiovar(dhd, 0, WLC_SET_VAR, "bw_cap", (char *)&param,
-			sizeof(param), FALSE);
+			sizeof(param), TRUE);
 	}
 
 	if (dhd->conf->bw_cap[1] >= 0) {
@@ -1101,7 +1102,7 @@ dhd_conf_set_bw_cap(dhd_pub_t *dhd)
 		param.bw_cap = (uint)dhd->conf->bw_cap[1];
 		CONFIG_MSG("set bw_cap 5g 0x%x\n", param.bw_cap);
 		dhd_conf_set_bufiovar(dhd, 0, WLC_SET_VAR, "bw_cap", (char *)&param,
-			sizeof(param), FALSE);
+			sizeof(param), TRUE);
 	}
 }
 
@@ -3499,7 +3500,8 @@ dhd_conf_postinit_ioctls(dhd_pub_t *dhd)
 #endif
 	if (conf->chip == BCM4354_CHIP_ID || conf->chip == BCM4356_CHIP_ID ||
 			conf->chip == BCM4371_CHIP_ID || conf->chip == BCM4359_CHIP_ID ||
-			conf->chip == BCM43569_CHIP_ID) {
+			conf->chip == BCM43569_CHIP_ID ||
+			conf->chip == BCM43751_CHIP_ID || conf->chip == BCM43752_CHIP_ID) {
 		dhd_conf_set_intiovar(dhd, WLC_SET_VAR, "txbf", 1, 0, FALSE);
 	}
 #if defined(WLEASYMESH)

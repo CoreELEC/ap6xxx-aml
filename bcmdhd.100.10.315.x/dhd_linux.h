@@ -274,6 +274,7 @@ typedef struct wifi_adapter_info {
 
 #define WLAN_PLAT_NODFS_FLAG	0x01
 #define WLAN_PLAT_AP_FLAG	0x02
+#if !defined(CONFIG_WIFI_CONTROL_FUNC)
 struct wifi_platform_data {
 #ifdef BUS_POWER_RESTORE
 	int (*set_power)(int val, wifi_adapter_info_t *adapter);
@@ -297,6 +298,7 @@ struct wifi_platform_data {
 	void *(*get_country_code)(char *ccode);
 #endif
 };
+#endif
 
 typedef struct bcmdhd_wifi_platdata {
 	uint				num_adapters;

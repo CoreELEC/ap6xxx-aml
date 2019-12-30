@@ -4469,7 +4469,7 @@ wl_cfg80211_post_ifcreate(struct net_device *ndev,
 	}
 
 #if defined(WLMESH_CFG80211) && defined(WL_EXT_IAPSTA)
-	if (wl_ext_check_mesh_creating(ndev)) {
+	if (wl_ext_iapsta_mesh_creating(ndev)) {
 		event->role = WLC_E_IF_ROLE_MESH;
 		WL_MSG(ndev->name, "change role to WLC_E_IF_ROLE_MESH\n");
 	}
@@ -4508,9 +4508,6 @@ wl_cfg80211_post_ifcreate(struct net_device *ndev,
 			return NULL;
 		}
 		wdev = new_ndev->ieee80211_ptr;
-#ifdef WL_EXT_IAPSTA
-		wl_ext_iapsta_update_iftype(new_ndev, event->ifidx, wl_iftype);
-#endif
 	} else
 #endif /* WL_STATIC_IF */
 	{
@@ -4545,6 +4542,9 @@ wl_cfg80211_post_ifcreate(struct net_device *ndev,
 		SET_NETDEV_DEV(new_ndev, wiphy_dev(wdev->wiphy));
 
 		memcpy(new_ndev->dev_addr, addr, ETH_ALEN);
+#ifdef WL_EXT_IAPSTA
+		wl_ext_iapsta_ifadding(new_ndev, event->ifidx);
+#endif /* WL_EXT_IAPSTA */
 		if (wl_cfg80211_register_if(cfg, event->ifidx, new_ndev, rtnl_lock_reqd)
 			!= BCME_OK) {
 			WL_ERR(("IFACE register failed \n"));
@@ -4574,6 +4574,9 @@ wl_cfg80211_post_ifcreate(struct net_device *ndev,
 	if (mode == WL_MODE_AP) {
 		wl_set_drv_status(cfg, AP_CREATING, new_ndev);
 	}
+#ifdef WL_EXT_IAPSTA
+	wl_ext_iapsta_update_iftype(new_ndev, event->ifidx, wl_iftype);
+#endif
 
 	WL_INFORM_MEM(("Network Interface (%s) registered with host."
 		" cfg_iftype:%d wl_role:%d " MACDBG "\n",
@@ -11154,8 +11157,9 @@ wl_cfg80211_bcn_bringup_ap(
 			WL_ERR(("Could not get wsec %d\n", err));
 			goto exit;
 		}
-		if (dhdp->conf->chip == BCM43430_CHIP_ID && bssidx > 0 && wsec >= 2) {
-			wsec |= 0x8; // terence 20180628: fix me, this is a workaround
+		if (dhdp->conf->chip == BCM43430_CHIP_ID && bssidx > 0 &&
+				(wsec & (TKIP_ENABLED|AES_ENABLED))) {
+			wsec |= WSEC_SWFLAG; // terence 20180628: fix me, this is a workaround
 			err = wldev_iovar_setint_bsscfg(dev, "wsec", wsec, bssidx);
 			if (err < 0) {
 				WL_ERR(("wsec error %d\n", err));
@@ -11812,6 +11816,9 @@ wl_cfg80211_start_ap(
 		if (err) {
 			WL_ERR(("Disabling NDO Failed %d\n", err));
 		}
+#ifdef WL_EXT_IAPSTA
+		wl_ext_iapsta_update_iftype(dev, dhd_net2idx(dhd->info, dev), WLC_E_IF_ROLE_AP);
+#endif /* WL_EXT_IAPSTA */
 #ifdef PKT_FILTER_SUPPORT
 		/* Disable packet filter */
 		if (dhd->early_suspended) {
@@ -13003,7 +13010,7 @@ static s32 wl_setup_wiphy(struct wireless_dev *wdev, struct device *sdiofunc_dev
 #endif // endif
 
 #ifdef WL_SAE
-		wdev->wiphy->features |= NL80211_FEATURE_SAE;
+	wdev->wiphy->features |= NL80211_FEATURE_SAE;
 #endif /* WL_SAE */
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 13, 0)) && defined(BCMSUP_4WAY_HANDSHAKE)
 	if (FW_SUPPORTED(dhd, idsup)) {

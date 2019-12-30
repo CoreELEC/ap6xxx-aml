@@ -2994,73 +2994,6 @@ extern int g_mhs_chan_for_cpcoex;
 #define APCS_DEFAULT_2G_CH	1
 #define APCS_DEFAULT_5G_CH	149
 
-#ifdef WL_ESCAN
-static int
-wl_android_escan_autochannel(struct net_device *dev, uint32 band)
-{
-	struct dhd_pub *dhd = dhd_get_pub(dev);
-	wlc_ssid_t ssid;
-	struct wl_escan_info *escan = NULL;
-	int ret = 0, retry = 0, retry_max, retry_interval = 250, channel = 0, up = 1;
-#ifdef WL_CFG80211
-	struct bcm_cfg80211 *cfg = wl_get_cfg(dev);
-#endif
-
-	escan = dhd->escan;
-	if (dhd) {
-		retry_max = WL_ESCAN_TIMER_INTERVAL_MS/retry_interval;
-		memset(&ssid, 0, sizeof(ssid));
-		ret = wldev_ioctl_get(dev, WLC_GET_UP, &up, sizeof(s32));
-		if (ret < 0 || up == 0) {
-			ret = wldev_ioctl_set(dev, WLC_UP, &up, sizeof(s32));
-		}
-		retry = retry_max;
-		while (retry--) {
-#ifdef WL_CFG80211
-			if (wl_get_drv_status_all(cfg, SCANNING) ||
-					escan->escan_state == ESCAN_STATE_SCANING)
-#else
-			if (escan->escan_state == ESCAN_STATE_SCANING)
-#endif
-			{
-				ANDROID_INFO(("Scanning %d tried, ret = %d\n",
-					(retry_max - retry), ret));
-			} else {
-				escan->autochannel = 1;
-				ret = wl_escan_set_scan(dev, dhd, &ssid, 0, TRUE);
-				if (!ret)
-					break;
-			}
-			OSL_SLEEP(retry_interval);
-		}
-		if ((retry == 0) || (ret < 0))
-			goto done;
-		retry = retry_max;
-		while (retry--) {
-			if (escan->escan_state == ESCAN_STATE_IDLE) {
-				if (band == WLC_BAND_5G)
-					channel = escan->best_5g_ch;
-				else
-					channel = escan->best_2g_ch;
-				WL_MSG(dev->name, "selected channel = %d\n", channel);
-				goto done;
-			}
-			ANDROID_INFO(("escan_state=%d, %d tried, ret = %d\n",
-				escan->escan_state, (retry_max - retry), ret));
-			OSL_SLEEP(retry_interval);
-		}
-		if ((retry == 0) || (ret < 0))
-			goto done;
-	}
-
-done:
-	if (escan)
-		escan->autochannel = 0;
-
-	return channel;
-}
-#endif /* WL_ESCAN */
-
 static int
 wl_android_set_auto_channel(struct net_device *dev, const char* cmd_str,
 	char* command, int total_len)
@@ -3146,7 +3079,7 @@ wl_android_set_auto_channel(struct net_device *dev, const char* cmd_str,
 	}
 
 #ifdef WL_ESCAN
-	channel = wl_android_escan_autochannel(dev, band);
+	channel = wl_ext_autochannel(dev, band);
 	if (channel)
 		goto done2;
 	else
@@ -6540,17 +6473,18 @@ wl_cfg80211_register_static_if(struct bcm_cfg80211 *cfg, u16 iftype, char *ifnam
 #ifdef DHD_USE_RANDMAC
 	dhd_generate_mac_addr(&ea_addr);
 	(void)memcpy_s(mac_addr, ETH_ALEN, ea_addr.octet, ETH_ALEN);
-#elif defined(CUSTOM_MULTI_MAC)
-	if (wifi_platform_get_mac_addr(dhd->info->adapter, hw_ether, "wlan1")) {
-		(void)memcpy_s(mac_addr, ETH_ALEN, primary_ndev->dev_addr, ETH_ALEN);
-		mac_addr[0] |= 0x02;
-	} else {
-		(void)memcpy_s(mac_addr, ETH_ALEN, hw_ether, ETH_ALEN);
-	}
 #else
+#if defined(CUSTOM_MULTI_MAC)
+	if (wifi_platform_get_mac_addr(dhd->info->adapter, hw_ether, "wlan1")) {
+#endif
 	/* Use primary mac with locally admin bit set */
 	(void)memcpy_s(mac_addr, ETH_ALEN, primary_ndev->dev_addr, ETH_ALEN);
 	mac_addr[0] |= 0x02;
+#if defined(CUSTOM_MULTI_MAC)
+	} else {
+		(void)memcpy_s(mac_addr, ETH_ALEN, hw_ether, ETH_ALEN);
+	}
+#endif
 #endif /* DHD_USE_RANDMAC */
 
 	ndev = wl_cfg80211_allocate_if(cfg, ifidx, ifname, mac_addr,
@@ -6627,14 +6561,16 @@ wl_cfg80211_static_if_open(struct net_device *net)
 	if (cfg->static_ndev_state != NDEV_STATE_FW_IF_CREATED) {
 #ifdef DHD_USE_RANDMAC
 		wdev = wl_cfg80211_add_if(cfg, primary_ndev, wl_iftype, net->name, net->dev_addr);
-#elif defined(CUSTOM_MULTI_MAC)
+#else
+#if defined(CUSTOM_MULTI_MAC)
 		if (wifi_platform_get_mac_addr(dhd->info->adapter, hw_ether, net->name)) {
-			wdev = wl_cfg80211_add_if(cfg, primary_ndev, wl_iftype, net->name, NULL);
+#endif
+		wdev = wl_cfg80211_add_if(cfg, primary_ndev, wl_iftype, net->name, NULL);
+#if defined(CUSTOM_MULTI_MAC)
 		} else {
 			wdev = wl_cfg80211_add_if(cfg, primary_ndev, wl_iftype, net->name, hw_ether);
 		}
-#else
-		wdev = wl_cfg80211_add_if(cfg, primary_ndev, wl_iftype, net->name, NULL);
+#endif
 #endif // endif
 		if (!wdev) {
 			ANDROID_ERROR(("[STATIC_IF] wdev is NULL, can't proceed"));

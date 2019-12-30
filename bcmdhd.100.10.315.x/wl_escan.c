@@ -206,6 +206,7 @@ static inline struct wl_bss_info *next_bss(struct wl_scan_results *list,
 		(struct wl_bss_info *)((uintptr) bss + dtoh32(bss->length)) : list->bss_info;
 }
 
+#if defined(ESCAN_RESULT_PATCH)
 static s32
 wl_escan_inform_bss(struct net_device *dev, struct wl_escan_info *escan)
 {
@@ -262,6 +263,7 @@ wl_escan_inform_bss(struct net_device *dev, struct wl_escan_info *escan)
 
 	return err;
 }
+#endif /* ESCAN_RESULT_PATCH */
 
 static wl_scan_params_t *
 wl_escan_alloc_params(struct net_device *dev, struct wl_escan_info *escan,
@@ -947,6 +949,7 @@ wl_escan_merge_scan_results(struct net_device *dev, struct wl_escan_info *escan,
 	char *event = extra, *end = extra + max_size - WE_ADD_EVENT_FIX, *value;
 	int16 rssi;
 	int channel;
+	chanspec_t chanspec;
 
 	/* overflow check cover fields before wpa IEs */
 	if (event + ETHER_ADDR_LEN + bi->SSID_len + IW_EV_UINT_LEN + IW_EV_FREQ_LEN +
@@ -963,9 +966,14 @@ wl_escan_merge_scan_results(struct net_device *dev, struct wl_escan_info *escan,
 	// terence 20150419: limit the max. rssi to -2 or the bss will be filtered out in android OS
 	rssi = MIN(dtoh16(bi->RSSI), RSSI_MAXVAL);
 #endif
-	channel = wf_chspec_ctlchan(wl_chspec_driver_to_host(escan->ioctl_ver, bi->chanspec));
-	ESCAN_SCAN(dev->name, "BSSID=%pM, channel=%3d, RSSI=%3d, SSID=\"%s\"\n",
-		&bi->BSSID, channel, rssi, bi->SSID);
+	chanspec = wl_chspec_driver_to_host(escan->ioctl_ver, bi->chanspec);
+	channel = wf_chspec_ctlchan(chanspec);
+	ESCAN_SCAN(dev->name, "BSSID %pM, channel %3d(%3d %sMHz), rssi %3d, SSID \"%s\"\n",
+		&bi->BSSID, channel, CHSPEC_CHANNEL(chanspec),
+		CHSPEC_IS20(chanspec)?"20":
+		CHSPEC_IS40(chanspec)?"40":
+		CHSPEC_IS80(chanspec)?"80":"160",
+		rssi, bi->SSID);
 
 	/* First entry must be the BSSID */
 	iwe.cmd = SIOCGIWAP;

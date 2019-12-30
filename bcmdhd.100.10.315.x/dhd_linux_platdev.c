@@ -344,8 +344,11 @@ static int wifi_plat_dev_drv_probe(struct platform_device *pdev)
 	ASSERT(dhd_wifi_platdata != NULL);
 	ASSERT(dhd_wifi_platdata->num_adapters == 1);
 	adapter = &dhd_wifi_platdata->adapters[0];
+#if defined(CONFIG_WIFI_CONTROL_FUNC)
+	adapter->wifi_plat_data = (struct wifi_platform_data *)(pdev->dev.platform_data);
+#else
 	adapter->wifi_plat_data = (void *)&dhd_wlan_control;
-//	adapter->wifi_plat_data = (struct wifi_platform_data *)(pdev->dev.platform_data);
+#endif
 
 	resource = platform_get_resource_byname(pdev, IORESOURCE_IRQ, "bcmdhd_wlan_irq");
 	if (resource == NULL)

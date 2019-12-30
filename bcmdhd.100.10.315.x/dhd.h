@@ -2038,7 +2038,7 @@ extern void dhd_os_tcpackunlock(dhd_pub_t *pub, unsigned long flags);
 
 extern int dhd_customer_oob_irq_map(void *adapter, unsigned long *irq_flags_ptr);
 extern int dhd_customer_gpio_wlan_ctrl(void *adapter, int onoff);
-extern int dhd_custom_get_mac_address(void *adapter, unsigned char *buf, char *name);
+extern int dhd_custom_get_mac_address(void *adapter, unsigned char *buf);
 #if defined(CUSTOM_COUNTRY_CODE)
 extern void get_customized_country_code(void *adapter, char *country_iso_code,
 	wl_country_t *cspec, u32 flags);

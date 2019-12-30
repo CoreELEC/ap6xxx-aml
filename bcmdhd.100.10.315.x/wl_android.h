@@ -97,17 +97,16 @@ int wl_handle_private_cmd(struct net_device *net, char *command, u32 cmd_len);
 int wl_ext_iapsta_attach_netdev(struct net_device *net, int ifidx, uint8 bssidx);
 int wl_ext_iapsta_attach_name(struct net_device *net, int ifidx);
 int wl_ext_iapsta_dettach_netdev(struct net_device *net, int ifidx);
-u32 wl_ext_iapsta_update_channel(dhd_pub_t *dhd, struct net_device *dev, u32 channel);
+int wl_ext_iapsta_update_net_device(struct net_device *net, int ifidx);
 int wl_ext_iapsta_alive_preinit(struct net_device *dev);
 int wl_ext_iapsta_alive_postinit(struct net_device *dev);
 int wl_ext_iapsta_attach(dhd_pub_t *pub);
 void wl_ext_iapsta_dettach(dhd_pub_t *pub);
-bool wl_ext_check_mesh_creating(struct net_device *net);
 #ifdef WL_CFG80211
+u32 wl_ext_iapsta_update_channel(dhd_pub_t *dhd, struct net_device *dev, u32 channel);
 void wl_ext_iapsta_update_iftype(struct net_device *net, int ifidx, int wl_iftype);
-#endif
-#ifdef WL_STATIC_IF
 void wl_ext_iapsta_ifadding(struct net_device *net, int ifidx);
+bool wl_ext_iapsta_mesh_creating(struct net_device *net);
 #endif
 extern int op_mode;
 #endif
@@ -132,6 +131,9 @@ int wl_ext_event_register(struct net_device *dev, dhd_pub_t *dhd,
 void wl_ext_event_deregister(struct net_device *dev, dhd_pub_t *dhd,
 	uint32 event, void *cb_func);
 void wl_ext_event_send(void *params, const wl_event_msg_t * e, void *data);
+#endif
+#ifdef WL_ESCAN
+int wl_ext_autochannel(struct net_device *dev, uint32 band);
 #endif
 int wl_android_ext_priv_cmd(struct net_device *net, char *command, int total_len,
 	int *bytes_written);

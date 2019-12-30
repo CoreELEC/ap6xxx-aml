@@ -11850,17 +11850,9 @@ dhd_register_if(dhd_pub_t *dhdp, int ifidx, bool need_rtnl_lock)
 	if (ifidx == 0)
 		printf("%s\n", dhd_version);
 	else {
-#if defined(WL_EXT_IAPSTA) || defined(USE_IW) || defined(WL_ESCAN)
-		wl_ext_event_attach_netdev(net, ifidx, ifp->bssidx);
-#ifdef WL_ESCAN
-		wl_escan_event_attach(net, dhdp);
-#endif /* WL_ESCAN */
 #ifdef WL_EXT_IAPSTA
-		wl_ext_iapsta_attach_netdev(net, ifidx, ifp->bssidx);
+		wl_ext_iapsta_update_net_device(net, ifidx);
 #endif /* WL_EXT_IAPSTA */
-#endif /* WL_EXT_IAPSTA || USE_IW || WL_ESCAN */
-	}
-	if (ifidx != 0) {
 		if (_dhd_set_mac_address(dhd, ifidx, net->dev_addr) == 0)
 			DHD_INFO(("%s: MACID is overwritten\n", __FUNCTION__));
 		else
@@ -11876,20 +11868,16 @@ dhd_register_if(dhd_pub_t *dhdp, int ifidx, bool need_rtnl_lock)
 		DHD_ERROR(("couldn't register the net device [%s], err %d\n", net->name, err));
 		goto fail;
 	}
-	if (ifidx == 0) {
 #if defined(WL_EXT_IAPSTA) || defined(USE_IW) || defined(WL_ESCAN)
-		wl_ext_event_attach_netdev(net, ifidx, ifp->bssidx);
+	wl_ext_event_attach_netdev(net, ifidx, ifp->bssidx);
 #ifdef WL_ESCAN
-		wl_escan_event_attach(net, dhdp);
+	wl_escan_event_attach(net, dhdp);
 #endif /* WL_ESCAN */
 #ifdef WL_EXT_IAPSTA
-		wl_ext_iapsta_attach_netdev(net, ifidx, ifp->bssidx);
-#endif /* WL_EXT_IAPSTA */
-#endif /* WL_EXT_IAPSTA || USE_IW || WL_ESCAN */
-	}
-#ifdef WL_EXT_IAPSTA
+	wl_ext_iapsta_attach_netdev(net, ifidx, ifp->bssidx);
 	wl_ext_iapsta_attach_name(net, ifidx);
 #endif /* WL_EXT_IAPSTA */
+#endif /* WL_EXT_IAPSTA || USE_IW || WL_ESCAN */
 
 	printf("Register interface [%s]  MAC: "MACDBG"\n\n", net->name,
 		MAC2STRDBG(net->dev_addr));
@@ -13233,7 +13221,7 @@ dhd_get_wireless_stats(struct net_device *dev)
 		return NULL;
 	}
 
-	if (!netif_running(dev)) {
+	if (!(dev->flags & IFF_UP)) {
 		return NULL;
 	}
 

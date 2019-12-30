@@ -186,7 +186,6 @@ static int dhd_wlan_get_mac_addr(unsigned char *buf
 {
 	int err = 0;
 
-	printf("======== %s ========\n", __FUNCTION__);
 #ifdef EXAMPLE_GET_MAC
 	/* EXAMPLE code */
 #ifdef CUSTOM_MULTI_MAC
@@ -230,6 +229,8 @@ static int dhd_wlan_get_mac_addr(unsigned char *buf
 		bcopy(macpad, buf+6, sizeof(macpad));
 	}
 #endif /* EXAMPLE_GET_MAC_VER2 */
+
+	printf("======== %s err=%d ========\n", __FUNCTION__, err);
 
 	return err;
 }
