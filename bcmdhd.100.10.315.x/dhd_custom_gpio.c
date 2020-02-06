@@ -1,7 +1,7 @@
 /*
  * Customer code to add GPIO control during WLAN start/stop
  *
- * Copyright (C) 1999-2018, Broadcom.
+ * Copyright (C) 1999-2019, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -85,7 +85,7 @@ dhd_customer_gpio_wlan_ctrl(void *adapter, int onoff)
 	return err;
 }
 
-#ifdef GET_CUSTOM_MAC_ENABLE
+#if 0
 /* Function to get custom MAC address */
 int
 dhd_custom_get_mac_address(void *adapter, unsigned char *buf)

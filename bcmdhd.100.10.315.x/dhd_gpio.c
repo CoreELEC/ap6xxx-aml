@@ -3,11 +3,6 @@
 #include <dhd_linux.h>
 #include <linux/gpio.h>
 
-#ifdef CUSTOMER_HW_PLATFORM
-#include <plat/sdhci.h>
-#define	sdmmc_channel	sdmmc_device_mmc0
-#endif /* CUSTOMER_HW_PLATFORM */
-
 #if defined(BUS_POWER_RESTORE) && defined(BCMSDIO)
 #include <linux/mmc/core.h>
 #include <linux/mmc/card.h>
@@ -29,6 +24,7 @@ static int gpio_wl_host_wake = -1; // WL_HOST_WAKE is output pin of WLAN module
 #include <linux/amlogic/aml_gpio_consumer.h>
 extern int wifi_irq_trigger_level(void);
 extern u8 *wifi_get_mac(void);
+extern u8 *wifi_get_ap_mac(void);
 #endif
 extern  void sdio_reinit(void);
 extern void set_usb_bt_power(int is_power);
@@ -171,8 +167,10 @@ static int dhd_wlan_set_carddetect(int present)
 #endif
 #elif defined(BCMPCIE)
 		printf("======== Card detection to remove PCIE card! ========\n");
+#ifdef CUSTOMER_HW_AMLOGIC
 		extern_wifi_set_enable(0);
 		mdelay(200);
+#endif
 #endif
 	}
 #endif /* BUS_POWER_RESTORE */
@@ -180,16 +178,41 @@ static int dhd_wlan_set_carddetect(int present)
 	return err;
 }
 
-static int dhd_wlan_get_mac_addr(unsigned char *buf)
+static int dhd_wlan_get_mac_addr(unsigned char *buf
+#ifdef CUSTOM_MULTI_MAC
+	, char *name
+#endif
+)
 {
 	int err = 0;
 
-	printf("======== %s ========\n", __FUNCTION__);
 #ifdef EXAMPLE_GET_MAC
 	/* EXAMPLE code */
+#ifdef CUSTOM_MULTI_MAC
+	if (!strcmp("wlan1", name)) {
+#ifdef CUSTOM_AP_MAC
+		bcopy((char *)wifi_get_ap_mac(), buf, sizeof(struct ether_addr));
+		if (buf[0] == 0xff) {
+			printf("custom wifi ap mac is not set\n");
+			err = -1;
+		} else
+			printf("custom wifi ap mac-addr: %02x:%02x:%02x:%02x:%02x:%02x\n",
+				buf[0], buf[1], buf[2],
+				buf[3], buf[4], buf[5]);
+#else
+		err = -1;
+#endif
+	} else
+#endif
 	{
-		struct ether_addr ea_example = {{0x00, 0x11, 0x22, 0x33, 0x44, 0xFF}};
-		bcopy((char *)&ea_example, buf, sizeof(struct ether_addr));
+		bcopy((char *)wifi_get_mac(), buf, sizeof(struct ether_addr));
+		if (buf[0] == 0xff) {
+			printf("custom wifi mac is not set\n");
+			err = -1;
+		} else
+			printf("custom wifi mac-addr: %02x:%02x:%02x:%02x:%02x:%02x\n",
+				buf[0], buf[1], buf[2],
+				buf[3], buf[4], buf[5]);
 	}
 #endif /* EXAMPLE_GET_MAC */
 #ifdef EXAMPLE_GET_MAC_VER2
@@ -206,6 +229,8 @@ static int dhd_wlan_get_mac_addr(unsigned char *buf)
 		bcopy(macpad, buf+6, sizeof(macpad));
 	}
 #endif /* EXAMPLE_GET_MAC_VER2 */
+
+	printf("======== %s err=%d ========\n", __FUNCTION__, err);
 
 	return err;
 }
