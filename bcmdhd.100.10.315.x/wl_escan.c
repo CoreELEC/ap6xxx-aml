@@ -896,7 +896,7 @@ wl_escan_set_scan(struct net_device *dev, dhd_pub_t *dhdp,
 
 	if (unlikely(err)) {
 		/* Don't print Error incase of Scan suppress */
-		if ((err == BCME_EPERM))
+		if (err == BCME_EPERM)
 			ESCAN_TRACE(dev->name, "Escan failed: Scan Suppressed\n");
 		else {
 			cnt++;
