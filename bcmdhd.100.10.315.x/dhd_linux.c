@@ -884,21 +884,25 @@ static int dhd_pm_callback(struct notifier_block *nfb, unsigned long action, voi
 #if defined(SUPPORT_P2P_GO_PS) && defined(PROP_TXSTATUS)
 		dhd_wlfc_suspend(&dhdinfo->pub);
 #endif /* defined(SUPPORT_P2P_GO_PS) && defined(PROP_TXSTATUS) */
-		dhd_conf_set_suspend_resume(&dhdinfo->pub, suspend, PM_NOTIFIER);
+		if (dhdinfo->pub.conf->suspend_mode == PM_NOTIFIER)
+			dhd_conf_set_suspend_resume(&dhdinfo->pub, suspend);
 		DHD_OS_WAKE_LOCK_RESTORE(&dhdinfo->pub);
 	} else {
-		dhd_conf_set_suspend_resume(&dhdinfo->pub, suspend, PM_NOTIFIER);
+		if (dhdinfo->pub.conf->suspend_mode == PM_NOTIFIER)
+			dhd_conf_set_suspend_resume(&dhdinfo->pub, suspend);
 #if defined(SUPPORT_P2P_GO_PS) && defined(PROP_TXSTATUS)
 		dhd_wlfc_resume(&dhdinfo->pub);
 #endif /* defined(SUPPORT_P2P_GO_PS) && defined(PROP_TXSTATUS) */
 		if (dhdinfo->pub.conf->suspend_mode == PM_NOTIFIER)
 			dhd_suspend_resume_helper(dhdinfo, suspend, 0);
 	}
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && (LINUX_VERSION_CODE <= \
         KERNEL_VERSION(2, 6, 39))
 	dhd_mmc_suspend = suspend;
 	smp_mb();
 #endif
+
 	return ret;
 }
 
@@ -2104,9 +2108,7 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 			dhd->sroamed = FALSE;
 #endif /* CONFIG_SILENT_ROAM */
 #endif /* DHD_USE_EARLYSUSPEND */
-			dhd_conf_set_suspend_resume(dhd, value, EARLY_SUSPEND);
 		} else {
-			dhd_conf_set_suspend_resume(dhd, value, EARLY_SUSPEND);
 #ifdef PKT_FILTER_SUPPORT
 			dhd->early_suspended = 0;
 #endif // endif
@@ -2313,8 +2315,10 @@ static void dhd_early_suspend(struct early_suspend *h)
 	struct dhd_info *dhd = container_of(h, struct dhd_info, early_suspend);
 	DHD_TRACE_HW4(("%s: enter\n", __FUNCTION__));
 
-	if (dhd)
+	if (dhd && dhd->pub.conf->suspend_mode == EARLY_SUSPEND) {
 		dhd_suspend_resume_helper(dhd, 1, 0);
+		dhd_conf_set_suspend_resume(&dhd->pub, 1);
+	}
 }
 
 static void dhd_late_resume(struct early_suspend *h)
@@ -2322,8 +2326,10 @@ static void dhd_late_resume(struct early_suspend *h)
 	struct dhd_info *dhd = container_of(h, struct dhd_info, early_suspend);
 	DHD_TRACE_HW4(("%s: enter\n", __FUNCTION__));
 
-	if (dhd)
+	if (dhd && dhd->pub.conf->suspend_mode == EARLY_SUSPEND) {
+		dhd_conf_set_suspend_resume(&dhd->pub, 0);
 		dhd_suspend_resume_helper(dhd, 0, 0);
+	}
 }
 #endif /* CONFIG_HAS_EARLYSUSPEND && DHD_USE_EARLYSUSPEND */
 
@@ -3578,6 +3584,8 @@ dhd_start_xmit(struct sk_buff *skb, struct net_device *net)
 
 	bcm_object_trace_opr(skb, BCM_OBJDBG_ADD_PKT, __FUNCTION__, __LINE__);
 
+	skb_orphan(skb);
+
 	/* re-align socket buffer if "skb->data" is odd address */
 	if (((unsigned long)(skb->data)) & 0x1) {
 		unsigned char *data = skb->data;
@@ -4752,7 +4760,13 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan)
 				continue;
 			}
 
-			if (dhdp->wl_event_enabled) {
+#ifdef SENDPROB
+			if (dhdp->wl_event_enabled ||
+				(dhdp->recv_probereq && (event.event_type == WLC_E_PROBREQ_MSG)))
+#else
+			if (dhdp->wl_event_enabled)
+#endif
+			{
 #ifdef DHD_USE_STATIC_CTRLBUF
 				/* If event bufs are allocated via static buf pool
 				 * and wl events are enabled, make a copy, free the
@@ -5516,8 +5530,8 @@ dhd_ethtool(dhd_info_t *dhd, void *uaddr)
 		/* Copy out any request driver name */
 		if (copy_from_user(&info, uaddr, sizeof(info)))
 			return -EFAULT;
-		strncpy(drvname, info.driver, sizeof(info.driver));
-		drvname[sizeof(info.driver)-1] = '\0';
+		strncpy(drvname, info.driver, sizeof(drvname) - 1);
+		drvname[sizeof(drvname) - 1] = '\0';
 
 		/* clear struct for return */
 		memset(&info, 0, sizeof(info));
@@ -6424,10 +6438,12 @@ dhd_ioctl_entry(struct net_device *net, struct ifreq *ifr, int cmd)
 		}
 	}
 
+#ifndef CONFIG_VTS_SUPPORT
 	if (!capable(CAP_NET_ADMIN)) {
 		bcmerror = BCME_EPERM;
 		goto done;
 	}
+#endif
 
 	/* Take backup of ioc.buf and restore later */
 	ioc_buf_user = ioc.buf;
@@ -7226,6 +7242,17 @@ dhd_pri_open(struct net_device *net)
 	/* Allow transmit calls */
 	netif_start_queue(net);
 	DHD_ERROR(("[%s] tx queue started\n", net->name));
+
+#if defined(SET_RPS_CPUS)
+	dhd_rps_cpus_enable(net, TRUE);
+	DHD_ERROR(("[%s] RPS started\n", net->name));
+#endif
+
+#if defined(SET_XPS_CPUS)
+	dhd_xps_cpus_enable(net, TRUE);
+	DHD_ERROR(("[%s] XPS started\n", net->name));
+#endif
+
 	return ret;
 }
 
@@ -8505,7 +8532,7 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen
 		len = strlen(if_name);
 		ch = if_name[len - 1];
 		if ((ch > '9' || ch < '0') && (len < IFNAMSIZ - 2))
-			strncat(if_name, "%d", 2);
+			strncat(if_name, "%d", IFNAMSIZ - len - 1);
 	}
 
 	/* Passing NULL to dngl_name to ensure host gets if_name in dngl_name member */
@@ -11991,6 +12018,14 @@ void dhd_detach(dhd_pub_t *dhdp)
 
 	if (dev) {
 		rtnl_lock();
+#if defined(WL_CFG80211) && defined(WL_STATIC_IF)
+		if (dhd->dhd_state & DHD_ATTACH_STATE_CFG80211) {
+			cfg = wl_get_cfg(dev);
+			if (cfg && cfg->static_ndev && (cfg->static_ndev->flags & IFF_UP)) {
+				dev_close(cfg->static_ndev);
+			}
+		}
+#endif /* WL_CFG80211 && WL_STATIC_IF */
 		if (dev->flags & IFF_UP) {
 			/* If IFF_UP is still up, it indicates that
 			 * "ifconfig wlan0 down" hasn't been called.
@@ -13486,7 +13521,9 @@ int net_os_set_suspend(struct net_device *dev, int val, int force)
 	int ret = 0;
 	dhd_info_t *dhd = DHD_DEV_INFO(dev);
 
-	if (dhd) {
+	if (dhd && dhd->pub.conf->suspend_mode == EARLY_SUSPEND) {
+		if (!val)
+			dhd_conf_set_suspend_resume(&dhd->pub, val);
 #ifdef CONFIG_MACH_UNIVERSAL7420
 #endif /* CONFIG_MACH_UNIVERSAL7420 */
 #if defined(CONFIG_HAS_EARLYSUSPEND) && defined(DHD_USE_EARLYSUSPEND)
@@ -13497,6 +13534,8 @@ int net_os_set_suspend(struct net_device *dev, int val, int force)
 #ifdef WL_CFG80211
 		wl_cfg80211_update_power_mode(dev);
 #endif // endif
+		if (val)
+			dhd_conf_set_suspend_resume(&dhd->pub, val);
 	}
 	return ret;
 }
@@ -18917,6 +18956,98 @@ int dhd_set_block_tdls_status(dhd_pub_t *dhdp, uint32 idx, int val)
 }
 #endif /* DHD_L2_FILTER */
 
+#if defined(SET_XPS_CPUS)
+int dhd_xps_cpus_enable(struct net_device *net, int enable)
+{
+	dhd_info_t *dhd = DHD_DEV_INFO(net);
+	dhd_if_t *ifp;
+	int ifidx;
+	char * XPS_CPU_SETBUF;
+
+	ifidx = dhd_net2idx(dhd, net);
+	if (ifidx == DHD_BAD_IF) {
+		DHD_ERROR(("%s bad ifidx\n", __FUNCTION__));
+		return -ENODEV;
+	}
+
+	if (ifidx == PRIMARY_INF) {
+		if (dhd->pub.op_mode == DHD_FLAG_IBSS_MODE) {
+			DHD_INFO(("%s : set for IBSS.\n", __FUNCTION__));
+			XPS_CPU_SETBUF = RPS_CPUS_MASK_IBSS;
+		} else {
+			DHD_INFO(("%s : set for BSS.\n", __FUNCTION__));
+			XPS_CPU_SETBUF = RPS_CPUS_MASK;
+		}
+	} else if (ifidx == VIRTUAL_INF) {
+		DHD_INFO(("%s : set for P2P.\n", __FUNCTION__));
+		XPS_CPU_SETBUF = RPS_CPUS_MASK_P2P;
+	} else {
+		DHD_ERROR(("%s : Invalid index : %d.\n", __FUNCTION__, ifidx));
+		return -EINVAL;
+	}
+
+	ifp = dhd->iflist[ifidx];
+	if (ifp) {
+		if (enable) {
+			DHD_INFO(("%s : set xps_cpus as [%s]\n", __FUNCTION__, XPS_CPU_SETBUF));
+			custom_xps_map_set(ifp->net, XPS_CPU_SETBUF, strlen(XPS_CPU_SETBUF));
+		} else {
+			custom_xps_map_clear(ifp->net);
+		}
+	} else {
+		DHD_ERROR(("%s : ifp is NULL!!\n", __FUNCTION__));
+		return -ENODEV;
+	}
+	return BCME_OK;
+}
+
+int custom_xps_map_set(struct net_device *net, char *buf, size_t len)
+{
+	cpumask_var_t mask;
+	int err;
+
+	DHD_INFO(("%s : Entered.\n", __FUNCTION__));
+
+	if (!alloc_cpumask_var(&mask, GFP_KERNEL)) {
+		DHD_ERROR(("%s : alloc_cpumask_var fail.\n", __FUNCTION__));
+		return -ENOMEM;
+	}
+
+	err = bitmap_parse(buf, len, cpumask_bits(mask), nr_cpumask_bits);
+	if (err) {
+		free_cpumask_var(mask);
+		DHD_ERROR(("%s : bitmap_parse fail.\n", __FUNCTION__));
+		return err;
+	}
+
+	err = netif_set_xps_queue(net, mask, 0);
+
+	free_cpumask_var(mask);
+
+	if (0 == err)
+		DHD_ERROR(("%s : Done. mapping cpu\n", __FUNCTION__));
+
+	return err;
+}
+
+void custom_xps_map_clear(struct net_device *net)
+{
+    struct xps_dev_maps *dev_maps;
+
+	DHD_INFO(("%s : Entered.\n", __FUNCTION__));
+
+    rcu_read_lock();
+    dev_maps = rcu_dereference(net->xps_maps);
+    rcu_read_unlock();
+
+	if (dev_maps) {
+		RCU_INIT_POINTER(net->xps_maps, NULL);
+		kfree_rcu(dev_maps, rcu);
+		DHD_INFO(("%s : xps_cpus map clear.\n", __FUNCTION__));
+	}
+}
+#endif // endif
+
 #if defined(SET_RPS_CPUS)
 int dhd_rps_cpus_enable(struct net_device *net, int enable)
 {
@@ -19022,7 +19153,7 @@ int custom_rps_map_set(struct netdev_rx_queue *queue, char *buf, size_t len)
 	}
 	free_cpumask_var(mask);
 
-	DHD_INFO(("%s : Done. mapping cpu nummber : %d\n", __FUNCTION__, map->len));
+	DHD_ERROR(("%s : Done. mapping cpu nummber : %d\n", __FUNCTION__, map->len));
 	return map->len;
 }
 

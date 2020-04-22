@@ -190,6 +190,19 @@ static int dhd_wlan_get_mac_addr(unsigned char *buf
 	/* EXAMPLE code */
 #ifdef CUSTOM_MULTI_MAC
 	if (!strcmp("wlan1", name)) {
+		struct ether_addr ea_example = {{0x00, 0x11, 0x22, 0x33, 0x44, 0xFF}};
+		bcopy((char *)&ea_example, buf, sizeof(struct ether_addr));
+	}
+#endif /* CUSTOM_MULTI_MAC */
+	{
+		struct ether_addr ea_example = {{0x02, 0x11, 0x22, 0x33, 0x44, 0x55}};
+		bcopy((char *)&ea_example, buf, sizeof(struct ether_addr));
+	}
+#endif /* EXAMPLE_GET_MAC */
+
+#ifdef CUSTOMER_HW_AMLOGIC
+#ifdef CUSTOM_MULTI_MAC
+	if (!strcmp("wlan1", name)) {
 #ifdef CUSTOM_AP_MAC
 		bcopy((char *)wifi_get_ap_mac(), buf, sizeof(struct ether_addr));
 		if (buf[0] == 0xff) {
@@ -214,7 +227,8 @@ static int dhd_wlan_get_mac_addr(unsigned char *buf
 				buf[0], buf[1], buf[2],
 				buf[3], buf[4], buf[5]);
 	}
-#endif /* EXAMPLE_GET_MAC */
+#endif
+
 #ifdef EXAMPLE_GET_MAC_VER2
 	/* EXAMPLE code */
 	{
@@ -323,7 +337,7 @@ int dhd_wlan_init_gpio(void)
 #ifdef CUSTOMER_HW_AMLOGIC
 #if defined(BCMPCIE)
 	printf("======== Card detection to detect PCIE card! ========\n");
-	pci_remove_reinit(0x14e4, 0x43ec, 1);
+	//pci_remove_reinit(0x14e4, 0x449d, 1);
 #endif
 #endif
 

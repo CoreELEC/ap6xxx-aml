@@ -116,6 +116,8 @@ typedef struct bcol_gtk_para {
 	char ptk[64];
 	char replay[8];
 } bcol_gtk_para_t;
+#define ACS_FW_BIT		(1<<0)
+#define ACS_DRV_BIT		(1<<1)
 #if defined(WL_EXT_IAPSTA) || defined(USE_IW)
 typedef enum WL_EVENT_PRIO {
 	PRIO_EVENT_IAPSTA,
@@ -132,9 +134,7 @@ void wl_ext_event_deregister(struct net_device *dev, dhd_pub_t *dhd,
 	uint32 event, void *cb_func);
 void wl_ext_event_send(void *params, const wl_event_msg_t * e, void *data);
 #endif
-#ifdef WL_ESCAN
-int wl_ext_autochannel(struct net_device *dev, uint32 band);
-#endif
+int wl_ext_autochannel(struct net_device *dev, uint acs, uint32 band);
 int wl_android_ext_priv_cmd(struct net_device *net, char *command, int total_len,
 	int *bytes_written);
 void wl_ext_get_sec(struct net_device *dev, int ifmode, char *sec, int total_len);

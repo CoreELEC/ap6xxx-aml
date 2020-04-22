@@ -747,6 +747,14 @@ static int wl_cfg80211_get_rsn_capa(const bcm_tlv_t *wpa2ie, const u8** rsn_cap)
 
 static s32 wl_setup_wiphy(struct wireless_dev *wdev, struct device *dev, dhd_pub_t *data);
 static void wl_free_wdev(struct bcm_cfg80211 *cfg);
+#ifdef CONFIG_CFG80211_INTERNAL_REGDB
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 11))
+static int
+#else
+static void
+#endif /* kernel version < 3.10.11 */
+wl_cfg80211_reg_notifier(struct wiphy *wiphy, struct regulatory_request *request);
+#endif /* CONFIG_CFG80211_INTERNAL_REGDB */
 
 static s32 wl_inform_single_bss(struct bcm_cfg80211 *cfg, wl_bss_info_t *bi, bool update_ssid);
 static s32 wl_update_bss_info(struct bcm_cfg80211 *cfg, struct net_device *ndev, bool update_ssid);
@@ -9851,7 +9859,10 @@ wl_cfg80211_set_channel(struct wiphy *wiphy, struct net_device *dev,
 	dev = ndev_to_wlc_ndev(dev, cfg);
 	_chan = ieee80211_frequency_to_channel(chan->center_freq);
 #ifdef WL_EXT_IAPSTA
-	_chan = wl_ext_iapsta_update_channel(dhd, dev, _chan);
+	if (dev->ieee80211_ptr->iftype == NL80211_IFTYPE_AP) {
+		wl_ext_iapsta_update_iftype(dev, dhd_net2idx(dhd->info, dev), WLC_E_IF_ROLE_AP);
+		_chan = wl_ext_iapsta_update_channel(dhd, dev, _chan);
+	}
 #endif
 	WL_MSG(dev->name, "netdev_ifidx(%d), chan_type(%d) target channel(%d) \n",
 		dev->ifindex, channel_type, _chan);
@@ -11065,9 +11076,9 @@ wl_cfg80211_bcn_bringup_ap(
 	/* Do abort scan before creating GO */
 	wl_cfg80211_scan_abort(cfg);
 
-	wl_ext_get_sec(dev, 0, sec, sizeof(sec));
-	WL_MSG(dev->name, "Creating AP/GO with sec=%s\n", sec);
 	if (dev_role == NL80211_IFTYPE_P2P_GO) {
+		wl_ext_get_sec(dev, 0, sec, sizeof(sec));
+		WL_MSG(dev->name, "Creating GO with sec=%s\n", sec);
 		is_bssup = wl_cfg80211_bss_isup(dev, bssidx);
 		if (!is_bssup && (ies->wpa2_ie != NULL)) {
 
@@ -11204,6 +11215,8 @@ wl_cfg80211_bcn_bringup_ap(
 			join_params.ssid.SSID_len);
 		join_params.ssid.SSID_len = htod32(join_params.ssid.SSID_len);
 
+		wl_ext_get_sec(dev, 0, sec, sizeof(sec));
+		WL_MSG(dev->name, "Creating AP with sec=%s\n", sec);
 		/* create softap */
 		if ((err = wldev_ioctl_set(dev, WLC_SET_SSID, &join_params,
 			join_params_size)) != 0) {
@@ -12768,6 +12781,61 @@ wl_cfg80211_set_country_code(struct net_device *net, char *country_code,
 	}
 	return ret;
 }
+
+#ifdef CONFIG_CFG80211_INTERNAL_REGDB
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 9, 0))
+#define WL_CFG80211_REG_NOTIFIER() static int wl_cfg80211_reg_notifier(struct wiphy *wiphy, struct regulatory_request *request)
+#else
+#define WL_CFG80211_REG_NOTIFIER() static void wl_cfg80211_reg_notifier(struct wiphy *wiphy, struct regulatory_request *request)
+#endif /* kernel version < 3.9.0 */
+#endif
+
+#ifdef CONFIG_CFG80211_INTERNAL_REGDB
+WL_CFG80211_REG_NOTIFIER()
+{
+	struct bcm_cfg80211 *cfg = (struct bcm_cfg80211 *)wiphy_priv(wiphy);
+	int ret = 0;
+	int revinfo = -1;
+
+	if (!request || !cfg) {
+		WL_ERR(("Invalid arg\n"));
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 11))
+		return -EINVAL;
+#else
+		return;
+#endif /* kernel version < 3.10.11 */
+	}
+
+	WL_DBG(("ccode: %c%c Initiator: %d\n",
+		request->alpha2[0], request->alpha2[1], request->initiator));
+
+	/* We support only REGDOM_SET_BY_USER as of now */
+	if ((request->initiator != NL80211_REGDOM_SET_BY_USER) &&
+		(request->initiator != NL80211_REGDOM_SET_BY_COUNTRY_IE)) {
+		WL_ERR(("reg_notifier for intiator:%d not supported : set default\n",
+			request->initiator));
+		/* in case of no supported country by regdb
+		     lets driver setup platform default Locale
+		*/
+	}
+
+	WL_ERR(("Set country code %c%c from %s\n",
+		request->alpha2[0], request->alpha2[1],
+		((request->initiator == NL80211_REGDOM_SET_BY_COUNTRY_IE) ? " 11d AP" : "User")));
+
+	if ((ret = wldev_set_country(bcmcfg_to_prmry_ndev(cfg), request->alpha2,
+		false, (request->initiator == NL80211_REGDOM_SET_BY_USER ? true : false),
+		revinfo)) < 0) {
+		WL_ERR(("set country Failed :%d\n", ret));
+	}
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 11))
+	return ret;
+#else
+	return;
+#endif /* kernel version < 3.10.11 */
+}
+#endif /* CONFIG_CFG80211_INTERNAL_REGDB */
 
 #ifdef CONFIG_PM
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 6, 0))
@@ -17455,6 +17523,10 @@ s32 wl_cfg80211_attach(struct net_device *ndev, void *context)
 	if (!cfg->btcoex_info)
 		goto cfg80211_attach_out;
 #endif // endif
+
+#ifdef CONFIG_CFG80211_INTERNAL_REGDB
+	wdev->wiphy->reg_notifier = wl_cfg80211_reg_notifier;
+#endif /* CONFIG_CFG80211_INTERNAL_REGDB */
 
 #if defined(WL_ENABLE_P2P_IF)
 	err = wl_cfg80211_attach_p2p(cfg);

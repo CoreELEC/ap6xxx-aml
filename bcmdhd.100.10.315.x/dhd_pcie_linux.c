@@ -1498,6 +1498,11 @@ dhdpcie_request_irq(dhdpcie_info_t *dhdpcie_info)
 			}
 		}
 
+		if (bus->d2h_intr_method == PCIE_MSI)
+			printf("%s: MSI enabled\n", __FUNCTION__);
+		else
+			printf("%s: INTx enabled\n", __FUNCTION__);
+
 		if (request_irq(pdev->irq, dhdpcie_isr, IRQF_SHARED,
 			dhdpcie_info->pciname, bus) < 0) {
 			DHD_ERROR(("%s: request_irq() failed\n", __FUNCTION__));

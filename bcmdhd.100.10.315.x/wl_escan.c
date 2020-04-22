@@ -1070,6 +1070,7 @@ wl_escan_get_scan(struct net_device *dev, dhd_pub_t *dhdp,
 #endif
 	char *buf = NULL;
 	struct ether_addr cur_bssid;
+	u8 ioctl_buf[WLC_IOCTL_SMLEN];
 
 	if (!extra) {
 		ESCAN_TRACE(dev->name, "extra is null\n");
@@ -1097,8 +1098,11 @@ wl_escan_get_scan(struct net_device *dev, dhd_pub_t *dhdp,
 
 	ESCAN_SCAN(dev->name, "SIOCGIWSCAN, len=%d\n", dwrq->length);
 
+	wldev_iovar_getbuf(dev, "cur_etheraddr", NULL, 0, ioctl_buf, WLC_IOCTL_SMLEN, NULL);
 	err = wldev_ioctl(dev, WLC_GET_BSSID, &cur_bssid, sizeof(cur_bssid), false);
-	if (err != BCME_NOTASSOCIATED && memcmp(&ether_null, &cur_bssid, ETHER_ADDR_LEN)) {
+	if (err != BCME_NOTASSOCIATED &&
+			memcmp(&ether_null, &cur_bssid, ETHER_ADDR_LEN) &&
+			memcmp(ioctl_buf, &cur_bssid, ETHER_ADDR_LEN)) {
 		// merge current connected bss
 		buf = kzalloc(WL_EXTRA_BUF_MAX, GFP_ATOMIC);
 		if (!buf) {

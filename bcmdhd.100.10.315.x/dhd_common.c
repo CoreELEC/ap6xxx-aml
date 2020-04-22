@@ -113,7 +113,7 @@
 #ifdef DHD_LOG_PRINT_RATE_LIMIT
 int log_print_threshold = 0;
 #endif /* DHD_LOG_PRINT_RATE_LIMIT */
-int dhd_msg_level = DHD_ERROR_VAL;// | DHD_FWLOG_VAL | DHD_EVENT_VAL
+int dhd_msg_level = DHD_ERROR_VAL | DHD_FWLOG_VAL;// | DHD_FWLOG_VAL | DHD_EVENT_VAL
 	/* For CUSTOMER_HW4 do not enable DHD_IOVAR_MEM_VAL by default */
 //	| DHD_PKT_MON_VAL;
 
@@ -1634,8 +1634,13 @@ dhd_doiovar(dhd_pub_t *dhd_pub, const bcm_iovar_t *vi, uint32 actionid, const ch
 
 #if defined(DHD_DEBUG)
 	case IOV_SVAL(IOV_CONS):
-		if (len > 0)
+		if (len > 0) {
+#ifdef CONSOLE_DPC
+			bcmerror = dhd_bus_txcons(dhd_pub, arg, len - 1);
+#else
 			bcmerror = dhd_bus_console_in(dhd_pub, arg, len - 1);
+#endif
+		}
 		break;
 #endif /* DHD_DEBUG */
 #endif /* !BCMDBUS */
@@ -5068,6 +5073,8 @@ dhd_get_suspend_bcn_li_dtim(dhd_pub_t *dhd, int *dtim_period, int *bcn_interval)
 		}
 	}
 
+	if (dhd->conf->suspend_bcn_li_dtim >= 0)
+		bcn_li_dtim = dhd->conf->suspend_bcn_li_dtim;
 	DHD_ERROR(("%s beacon=%d bcn_li_dtim=%d DTIM=%d Listen=%d\n",
 		__FUNCTION__, *bcn_interval, bcn_li_dtim, *dtim_period, CUSTOM_LISTEN_INTERVAL));
 
@@ -5120,7 +5127,6 @@ dhd_get_suspend_bcn_li_dtim(dhd_pub_t *dhd)
 		if (bcn_li_dtim == 0) {
 			bcn_li_dtim = 1;
 		}
-		bcn_li_dtim = MAX(dhd->suspend_bcn_li_dtim, bcn_li_dtim);
 	} else {
 		/* attemp to use platform defined dtim skip interval */
 		bcn_li_dtim = dhd->suspend_bcn_li_dtim;

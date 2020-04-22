@@ -94,6 +94,7 @@
 #define CMD_ISAM_ENABLE			"ISAM_ENABLE"
 #define CMD_ISAM_DISABLE		"ISAM_DISABLE"
 #define CMD_ISAM_STATUS			"ISAM_STATUS"
+#define CMD_ISAM_PARAM			"ISAM_PARAM"
 #ifdef PROP_TXSTATUS
 #ifdef PROP_TXSTATUS_VSDB
 #include <dhd_wlfc.h>
@@ -1005,6 +1006,7 @@ wl_ext_get_sec(struct net_device *dev, int ifmode, char *sec, int total_len)
 	wl_ext_iovar_getint(dev, "wsec", &wsec);
 	wldev_iovar_getint(dev, "mfp", &mfp);
 
+#ifdef WL_EXT_IAPSTA
 	if (ifmode == IMESH_MODE) {
 		if (auth == WL_AUTH_OPEN_SYSTEM && wpa_auth == WPA_AUTH_DISABLED) {
 			bytes_written += snprintf(sec+bytes_written, total_len, "open");
@@ -1014,7 +1016,9 @@ wl_ext_get_sec(struct net_device *dev, int ifmode, char *sec, int total_len)
 			bytes_written += snprintf(sec+bytes_written, total_len, "%d/0x%x",
 				auth, wpa_auth);
 		}
-	} else {
+	} else
+#endif /* WL_EXT_IAPSTA */
+	{
 		if (auth == WL_AUTH_OPEN_SYSTEM && wpa_auth == WPA_AUTH_DISABLED) {
 			bytes_written += snprintf(sec+bytes_written, total_len, "open");
 		} else if (auth == WL_AUTH_SHARED_KEY && wpa_auth == WPA_AUTH_DISABLED) {
@@ -1041,13 +1045,16 @@ wl_ext_get_sec(struct net_device *dev, int ifmode, char *sec, int total_len)
 		bytes_written += snprintf(sec+bytes_written, total_len, "/%d", mfp);
 	}
 
+#ifdef WL_EXT_IAPSTA
 	if (ifmode == IMESH_MODE) {
 		if (wsec == WSEC_NONE) {
 			bytes_written += snprintf(sec+bytes_written, total_len, "/none");
 		} else {
 			bytes_written += snprintf(sec+bytes_written, total_len, "/aes");
 		}
-	} else {
+	} else
+#endif /* WL_EXT_IAPSTA */
+	{
 		if (wsec == WSEC_NONE) {
 			bytes_written += snprintf(sec+bytes_written, total_len, "/none");
 		} else if (wsec == WEP_ENABLED) {
@@ -1064,6 +1071,51 @@ wl_ext_get_sec(struct net_device *dev, int ifmode, char *sec, int total_len)
 		}
 	}
 
+}
+
+static bool
+wl_ext_dfs_chan(uint16 chan)
+{
+	if (chan >= 52 && chan <= 144)
+		return TRUE;
+	return FALSE;
+}
+
+static uint16
+wl_ext_get_default_chan(struct net_device *dev,
+	uint16 *chan_2g, uint16 *chan_5g, bool nodfs)
+{
+	struct dhd_pub *dhd = dhd_get_pub(dev);
+	uint16 chan_tmp = 0, chan = 0;
+	wl_uint32_list_t *list;
+	u8 valid_chan_list[sizeof(u32)*(WL_NUMCHANNELS + 1)];
+	s32 ret = BCME_OK;
+	int i;
+
+	*chan_2g = 0;
+	*chan_5g = 0;
+	memset(valid_chan_list, 0, sizeof(valid_chan_list));
+	list = (wl_uint32_list_t *)(void *) valid_chan_list;
+	list->count = htod32(WL_NUMCHANNELS);
+	ret = wl_ext_ioctl(dev, WLC_GET_VALID_CHANNELS, valid_chan_list,
+		sizeof(valid_chan_list), 0);
+	if (ret == 0) {
+		for (i=0; i<dtoh32(list->count); i++) {
+			chan_tmp = dtoh32(list->element[i]);
+			if (!dhd_conf_match_channel(dhd, chan_tmp))
+				continue;
+			if (chan_tmp <= 13) {
+				*chan_2g = chan_tmp;
+			} else {
+				if (wl_ext_dfs_chan(chan_tmp) && nodfs)
+					continue;
+				else if (chan_tmp >= 36 && chan_tmp <= 161)
+					*chan_5g = chan_tmp;
+			}
+		}
+	}
+
+	return chan;
 }
 
 #if defined(SENDPROB) || (defined(WLMESH) && defined(WL_ESCAN))
@@ -1491,14 +1543,6 @@ set_channel:
 }
 
 static bool
-wl_ext_dfs_chan(uint16 chan)
-{
-	if (chan >= 52 && chan <= 144)
-		return TRUE;
-	return FALSE;
-}
-
-static bool
 wl_ext_radar_detect(struct net_device *dev)
 {
 	int ret = BCME_OK;
@@ -1788,6 +1832,39 @@ wl_ext_iapsta_preinit(struct net_device *dev, struct wl_apsta_params *apsta_para
 }
 
 static int
+wl_ext_isam_param(struct net_device *dev, char *command, int total_len)
+{
+	struct dhd_pub *dhd = dhd_get_pub(dev);
+	struct wl_apsta_params *apsta_params = dhd->iapsta_params;
+	int ret = -1;
+	char *pick_tmp, *data, *param;
+	int bytes_written=-1;
+
+	AEXT_TRACE(dev->name, "command=%s, len=%d\n", command, total_len);
+
+	pick_tmp = command;
+	param = bcmstrtok(&pick_tmp, " ", 0); // pick isam_param
+	param = bcmstrtok(&pick_tmp, " ", 0); // pick cmd
+	while (param != NULL) {
+		data = bcmstrtok(&pick_tmp, " ", 0); // pick data
+		if (!strcmp(param, "acs")) {
+			if (data) {
+				apsta_params->acs = simple_strtol(data, NULL, 0);
+				ret = 0;
+			} else {
+				bytes_written = snprintf(command, total_len, "%d", apsta_params->acs);
+				ret = bytes_written;
+				goto exit;
+			}
+		}
+		param = bcmstrtok(&pick_tmp, " ", 0); // pick cmd
+	}
+
+exit:
+	return ret;
+}
+
+static int
 wl_ext_isam_init(struct net_device *dev, char *command, int total_len)
 {
 	struct dhd_pub *dhd = dhd_get_pub(dev);
@@ -1805,125 +1882,104 @@ wl_ext_isam_init(struct net_device *dev, char *command, int total_len)
 	param = bcmstrtok(&pick_tmp, " ", 0); // skip iapsta_init
 	param = bcmstrtok(&pick_tmp, " ", 0);
 	while (param != NULL) {
+		pick_tmp2 = bcmstrtok(&pick_tmp, " ", 0);
+		if (!pick_tmp2) {
+			AEXT_ERROR(dev->name, "wrong param %s\n", param);
+			return -1;
+		}
 		if (!strcmp(param, "mode")) {
 			pch = NULL;
-			pick_tmp2 = bcmstrtok(&pick_tmp, " ", 0);
-			if (pick_tmp2) {
-				if (!strcmp(pick_tmp2, "sta")) {
-					apsta_params->apstamode = ISTAONLY_MODE;
-				} else if (!strcmp(pick_tmp2, "ap")) {
-					apsta_params->apstamode = IAPONLY_MODE;
-				} else if (!strcmp(pick_tmp2, "sta-ap")) {
-					apsta_params->apstamode = ISTAAP_MODE;
-				} else if (!strcmp(pick_tmp2, "sta-sta")) {
-					apsta_params->apstamode = ISTASTA_MODE;
-					apsta_params->vsdb = TRUE;
-				} else if (!strcmp(pick_tmp2, "ap-ap")) {
-					apsta_params->apstamode = IDUALAP_MODE;
-				} else if (!strcmp(pick_tmp2, "sta-ap-ap")) {
-					apsta_params->apstamode = ISTAAPAP_MODE;
-				} else if (!strcmp(pick_tmp2, "apsta")) {
-					apsta_params->apstamode = ISTAAP_MODE;
-					apsta_params->if_info[IF_PIF].ifmode = ISTA_MODE;
-					apsta_params->if_info[IF_VIF].ifmode = IAP_MODE;
-				} else if (!strcmp(pick_tmp2, "dualap")) {
-					apsta_params->apstamode = IDUALAP_MODE;
-					apsta_params->if_info[IF_PIF].ifmode = IAP_MODE;
-					apsta_params->if_info[IF_VIF].ifmode = IAP_MODE;
-				} else if (!strcmp(pick_tmp2, "sta-go") ||
-						!strcmp(pick_tmp2, "gosta")) {
-					if (!FW_SUPPORTED(dhd, p2p)) {
-						return -1;
-					}
-					apsta_params->apstamode = ISTAGO_MODE;
-					apsta_params->if_info[IF_PIF].ifmode = ISTA_MODE;
-					apsta_params->if_info[IF_VIF].ifmode = IAP_MODE;
-#ifdef WLMESH
-				} else if (!strcmp(pick_tmp2, "mesh")) {
-					apsta_params->apstamode = IMESHONLY_MODE;
-				} else if (!strcmp(pick_tmp2, "sta-mesh")) {
-					apsta_params->apstamode = ISTAMESH_MODE;
-				} else if (!strcmp(pick_tmp2, "sta-ap-mesh")) {
-					apsta_params->apstamode = ISTAAPMESH_MODE;
-				} else if (!strcmp(pick_tmp2, "mesh-ap")) {
-					apsta_params->apstamode = IMESHAP_MODE;
-				} else if (!strcmp(pick_tmp2, "mesh-ap-ap")) {
-					apsta_params->apstamode = IMESHAPAP_MODE;
-#endif /* WLMESH */
-				} else {
-					AEXT_ERROR(dev->name, "mode [sta|ap|sta-ap|ap-ap]\n");
+			if (!strcmp(pick_tmp2, "sta")) {
+				apsta_params->apstamode = ISTAONLY_MODE;
+			} else if (!strcmp(pick_tmp2, "ap")) {
+				apsta_params->apstamode = IAPONLY_MODE;
+			} else if (!strcmp(pick_tmp2, "sta-ap")) {
+				apsta_params->apstamode = ISTAAP_MODE;
+			} else if (!strcmp(pick_tmp2, "sta-sta")) {
+				apsta_params->apstamode = ISTASTA_MODE;
+				apsta_params->vsdb = TRUE;
+			} else if (!strcmp(pick_tmp2, "ap-ap")) {
+				apsta_params->apstamode = IDUALAP_MODE;
+			} else if (!strcmp(pick_tmp2, "sta-ap-ap")) {
+				apsta_params->apstamode = ISTAAPAP_MODE;
+			} else if (!strcmp(pick_tmp2, "apsta")) {
+				apsta_params->apstamode = ISTAAP_MODE;
+				apsta_params->if_info[IF_PIF].ifmode = ISTA_MODE;
+				apsta_params->if_info[IF_VIF].ifmode = IAP_MODE;
+			} else if (!strcmp(pick_tmp2, "dualap")) {
+				apsta_params->apstamode = IDUALAP_MODE;
+				apsta_params->if_info[IF_PIF].ifmode = IAP_MODE;
+				apsta_params->if_info[IF_VIF].ifmode = IAP_MODE;
+			} else if (!strcmp(pick_tmp2, "sta-go") ||
+					!strcmp(pick_tmp2, "gosta")) {
+				if (!FW_SUPPORTED(dhd, p2p)) {
 					return -1;
 				}
-				pch = bcmstrtok(&pick_tmp2, " -", 0);
-				for (i=0; i<MAX_IF_NUM && pch; i++) {
-					if (!strcmp(pch, "sta"))
-						apsta_params->if_info[i].ifmode = ISTA_MODE;
-					else if (!strcmp(pch, "ap"))
-						apsta_params->if_info[i].ifmode = IAP_MODE;
+				apsta_params->apstamode = ISTAGO_MODE;
+				apsta_params->if_info[IF_PIF].ifmode = ISTA_MODE;
+				apsta_params->if_info[IF_VIF].ifmode = IAP_MODE;
 #ifdef WLMESH
-					else if (!strcmp(pch, "mesh")) {
-						if (dhd->conf->fw_type != FW_TYPE_MESH) {
-							AEXT_ERROR(dev->name, "wrong fw type\n");
-							return -1;
-						}
-						apsta_params->if_info[i].ifmode = IMESH_MODE;
-					}
+			} else if (!strcmp(pick_tmp2, "mesh")) {
+				apsta_params->apstamode = IMESHONLY_MODE;
+			} else if (!strcmp(pick_tmp2, "sta-mesh")) {
+				apsta_params->apstamode = ISTAMESH_MODE;
+			} else if (!strcmp(pick_tmp2, "sta-ap-mesh")) {
+				apsta_params->apstamode = ISTAAPMESH_MODE;
+			} else if (!strcmp(pick_tmp2, "mesh-ap")) {
+				apsta_params->apstamode = IMESHAP_MODE;
+			} else if (!strcmp(pick_tmp2, "mesh-ap-ap")) {
+				apsta_params->apstamode = IMESHAPAP_MODE;
 #endif /* WLMESH */
-					pch = bcmstrtok(&pick_tmp2, " -", 0);
+			} else {
+				AEXT_ERROR(dev->name, "mode [sta|ap|sta-ap|ap-ap]\n");
+				return -1;
+			}
+			pch = bcmstrtok(&pick_tmp2, " -", 0);
+			for (i=0; i<MAX_IF_NUM && pch; i++) {
+				if (!strcmp(pch, "sta"))
+					apsta_params->if_info[i].ifmode = ISTA_MODE;
+				else if (!strcmp(pch, "ap"))
+					apsta_params->if_info[i].ifmode = IAP_MODE;
+#ifdef WLMESH
+				else if (!strcmp(pch, "mesh")) {
+					if (dhd->conf->fw_type != FW_TYPE_MESH) {
+						AEXT_ERROR(dev->name, "wrong fw type\n");
+						return -1;
+					}
+					apsta_params->if_info[i].ifmode = IMESH_MODE;
 				}
+#endif /* WLMESH */
+				pch = bcmstrtok(&pick_tmp2, " -", 0);
 			}
 		}
 		else if (!strcmp(param, "rsdb")) {
-			pch = bcmstrtok(&pick_tmp, " ", 0);
-			if (pch) {
-				apsta_params->rsdb = (int)simple_strtol(pch, NULL, 0);
-			}
+			apsta_params->rsdb = (int)simple_strtol(pick_tmp2, NULL, 0);
 		} else if (!strcmp(param, "vsdb")) {
-			pch = bcmstrtok(&pick_tmp, " ", 0);
-			if (pch) {
-				if (!strcmp(pch, "y")) {
-					apsta_params->vsdb = TRUE;
-				} else if (!strcmp(pch, "n")) {
-					apsta_params->vsdb = FALSE;
-				} else {
-					AEXT_ERROR(dev->name, "vsdb [y|n]\n");
-					return -1;
-				}
+			if (!strcmp(pick_tmp2, "y")) {
+				apsta_params->vsdb = TRUE;
+			} else if (!strcmp(pick_tmp2, "n")) {
+				apsta_params->vsdb = FALSE;
+			} else {
+				AEXT_ERROR(dev->name, "vsdb [y|n]\n");
+				return -1;
 			}
 		} else if (!strcmp(param, "csa")) {
-			pch = bcmstrtok(&pick_tmp, " ", 0);
-			if (pch) {
-				apsta_params->csa = (int)simple_strtol(pch, NULL, 0);
-			}
+			apsta_params->csa = (int)simple_strtol(pick_tmp2, NULL, 0);
 		} else if (!strcmp(param, "acs")) {
-			pch = bcmstrtok(&pick_tmp, " ", 0);
-			if (pch) {
-				apsta_params->acs = (int)simple_strtol(pch, NULL, 0);
-			}
+			apsta_params->acs = (int)simple_strtol(pick_tmp2, NULL, 0);
 #if defined(WLMESH) && defined(WL_ESCAN)
 		} else if (!strcmp(param, "macs")) {
-			pch = bcmstrtok(&pick_tmp, " ", 0);
-			if (pch) {
-				apsta_params->macs = (int)simple_strtol(pch, NULL, 0);
-			}
+			apsta_params->macs = (int)simple_strtol(pick_tmp2, NULL, 0);
 #endif /* WLMESH && WL_ESCAN */
 		} else if (!strcmp(param, "ifname")) {
 			pch = NULL;
-			pick_tmp2 = bcmstrtok(&pick_tmp, " ", 0);
-			if (pick_tmp2)
-				pch = bcmstrtok(&pick_tmp2, " -", 0);
+			pch = bcmstrtok(&pick_tmp2, " -", 0);
 			for (i=0; i<MAX_IF_NUM && pch; i++) {
 				strcpy(apsta_params->if_info[i].ifname, pch);
 				pch = bcmstrtok(&pick_tmp2, " -", 0);
 			}
 		} else if (!strcmp(param, "vifname")) {
-			pch = bcmstrtok(&pick_tmp, " ", 0);
-			if (pch)
-				strcpy(apsta_params->if_info[IF_VIF].ifname, pch);
-			else {
-				AEXT_ERROR(dev->name, "vifname [wlan1]\n");
-				return -1;
-			}
+			strcpy(apsta_params->if_info[IF_VIF].ifname, pick_tmp2);
 		}
 		param = bcmstrtok(&pick_tmp, " ", 0);
 	}
@@ -3154,43 +3210,6 @@ wl_ext_trigger_csa(struct wl_apsta_params *apsta_params, struct wl_if_info *cur_
 	return 0;
 }
 
-static uint16
-wl_ext_get_2g5g_chan(struct net_device *dev,
-	uint16 *chan_2g, uint16 *chan_5g, bool nodfs)
-{
-	struct dhd_pub *dhd = dhd_get_pub(dev);
-	uint16 chan_tmp = 0, chan = 0;
-	wl_uint32_list_t *list;
-	u8 valid_chan_list[sizeof(u32)*(WL_NUMCHANNELS + 1)];
-	s32 ret = BCME_OK;
-	int i;
-
-	*chan_2g = 0;
-	*chan_5g = 0;
-	memset(valid_chan_list, 0, sizeof(valid_chan_list));
-	list = (wl_uint32_list_t *)(void *) valid_chan_list;
-	list->count = htod32(WL_NUMCHANNELS);
-	ret = wl_ext_ioctl(dev, WLC_GET_VALID_CHANNELS, valid_chan_list,
-		sizeof(valid_chan_list), 0);
-	if (ret == 0) {
-		for (i=0; i<dtoh32(list->count); i++) {
-			chan_tmp = dtoh32(list->element[i]);
-			if (!dhd_conf_match_channel(dhd, chan_tmp))
-				continue;
-			if (chan_tmp <= 13) {
-				*chan_2g = chan_tmp;
-			} else {
-				if (wl_ext_dfs_chan(chan_tmp) && nodfs)
-					continue;
-				else if (chan_tmp >= 36 && chan_tmp <= 161)
-					*chan_5g = chan_tmp;
-			}
-		}
-	}
-
-	return chan;
-}
-
 static void
 wl_ext_move_cur_dfs_channel(struct wl_apsta_params *apsta_params,
 	struct wl_if_info *cur_if)
@@ -3202,7 +3221,7 @@ wl_ext_move_cur_dfs_channel(struct wl_apsta_params *apsta_params,
 	if (wl_ext_master_if(cur_if) && wl_ext_dfs_chan(cur_if->channel) &&
 			!apsta_params->radar) {
 
-		wl_ext_get_2g5g_chan(cur_if->dev, &chan_2g, &chan_5g, TRUE);
+		wl_ext_get_default_chan(cur_if->dev, &chan_2g, &chan_5g, TRUE);
 		if (!chan_2g && !chan_5g) {
 			cur_if->channel = 0;
 			WL_MSG(cur_if->ifname, "[%c] no valid channel\n", cur_if->prefix);
@@ -3219,10 +3238,10 @@ wl_ext_move_cur_dfs_channel(struct wl_apsta_params *apsta_params,
 				auto_band = WLC_BAND_2G;
 				other_chan = wl_ext_same_band(apsta_params, cur_if, TRUE);
 			}
-#ifdef WL_ESCAN
-			if (!other_chan && apsta_params->acs)
-				other_chan = wl_ext_autochannel(cur_if->dev, auto_band);
-#endif /* WL_ESCAN */
+			if (!other_chan) {
+				other_chan = wl_ext_autochannel(cur_if->dev, ACS_FW_BIT|ACS_DRV_BIT,
+					auto_band);
+			}
 			if (other_chan)
 				cur_if->channel = other_chan;
 		} else if (apsta_params->rsdb) {
@@ -3240,10 +3259,10 @@ wl_ext_move_cur_dfs_channel(struct wl_apsta_params *apsta_params,
 				auto_band = WLC_BAND_2G;
 				other_chan = wl_ext_same_band(apsta_params, cur_if, TRUE);
 			}
-#ifdef WL_ESCAN
-			if (!other_chan && apsta_params->acs)
-				other_chan = wl_ext_autochannel(cur_if->dev, auto_band);
-#endif /* WL_ESCAN */
+			if (!other_chan) {
+				other_chan = wl_ext_autochannel(cur_if->dev, ACS_FW_BIT|ACS_DRV_BIT,
+					auto_band);
+			}
 			if (other_chan)
 				cur_if->channel = other_chan;
 		} else {
@@ -3253,11 +3272,10 @@ wl_ext_move_cur_dfs_channel(struct wl_apsta_params *apsta_params,
 			if (wl_ext_dfs_chan(other_chan)) {
 				cur_if->channel = 0;
 			}
-#ifdef WL_ESCAN
-			else if (!other_chan && apsta_params->acs) {
-				other_chan = wl_ext_autochannel(cur_if->dev, auto_band);
+			else if (!other_chan) {
+				other_chan = wl_ext_autochannel(cur_if->dev, ACS_FW_BIT|ACS_DRV_BIT,
+					auto_band);
 			}
-#endif /* WL_ESCAN */
 			if (other_chan)
 				cur_if->channel = other_chan;
 		}
@@ -3277,7 +3295,7 @@ wl_ext_move_other_dfs_channel(struct wl_apsta_params *apsta_params,
 	if (wl_ext_master_if(cur_if) && wl_ext_dfs_chan(cur_if->channel) &&
 			!apsta_params->radar) {
 
-		wl_ext_get_2g5g_chan(cur_if->dev, &chan_2g, &chan_5g, TRUE);
+		wl_ext_get_default_chan(cur_if->dev, &chan_2g, &chan_5g, TRUE);
 		if (!chan_2g && !chan_5g) {
 			cur_if->channel = 0;
 			WL_MSG(cur_if->ifname, "[%c] no valid channel\n", cur_if->prefix);
@@ -3294,10 +3312,10 @@ wl_ext_move_other_dfs_channel(struct wl_apsta_params *apsta_params,
 				auto_band = WLC_BAND_2G;
 				other_chan = wl_ext_same_band(apsta_params, cur_if, TRUE);
 			}
-#ifdef WL_ESCAN
-			if (!other_chan && apsta_params->acs)
-				other_chan = wl_ext_autochannel(cur_if->dev, auto_band);
-#endif /* WL_ESCAN */
+			if (!other_chan) {
+				other_chan = wl_ext_autochannel(cur_if->dev, ACS_FW_BIT|ACS_DRV_BIT,
+					auto_band);
+			}
 			if (other_chan)
 				cur_if->channel = other_chan;
 		} else if (apsta_params->rsdb) {
@@ -3305,10 +3323,10 @@ wl_ext_move_other_dfs_channel(struct wl_apsta_params *apsta_params,
 				cur_if->channel = chan_2g;
 				auto_band = WLC_BAND_2G;
 				other_chan = wl_ext_same_band(apsta_params, cur_if, TRUE);
-#ifdef WL_ESCAN
-				if (!other_chan && apsta_params->acs)
-					other_chan = wl_ext_autochannel(cur_if->dev, auto_band);
-#endif /* WL_ESCAN */
+				if (!other_chan) {
+					other_chan = wl_ext_autochannel(cur_if->dev, ACS_FW_BIT|ACS_DRV_BIT,
+						auto_band);
+				}
 			} else {
 				cur_if->channel = 0;
 			}
@@ -3324,7 +3342,7 @@ wl_ext_move_other_dfs_channel(struct wl_apsta_params *apsta_params,
 
 static uint16
 wl_ext_move_cur_channel(struct wl_apsta_params *apsta_params,
-	struct net_device *dev, struct wl_if_info *cur_if)
+	struct wl_if_info *cur_if)
 {
 	struct wl_if_info *tmp_if, *target_if = NULL;
 	uint16 tmp_chan, target_chan = 0;
@@ -3374,7 +3392,7 @@ exit:
 
 static void
 wl_ext_move_other_channel(struct wl_apsta_params *apsta_params,
-	struct net_device *dev, struct wl_if_info *cur_if)
+	struct wl_if_info *cur_if)
 {
 	struct wl_if_info *tmp_if, *target_if=NULL;
 	uint16 tmp_chan, target_chan = 0;
@@ -3407,7 +3425,7 @@ wl_ext_move_other_channel(struct wl_apsta_params *apsta_params,
 		wl_ext_move_other_dfs_channel(apsta_params, target_if);
 		if (apsta_params->csa == 0) {
 			wl_ext_if_down(apsta_params, target_if);
-			wl_ext_move_other_channel(apsta_params, dev, cur_if);
+			wl_ext_move_other_channel(apsta_params, cur_if);
 			if (target_if->ifmode == ISTA_MODE || target_if->ifmode == IMESH_MODE) {
 				wl_ext_enable_iface(target_if->dev, target_if->ifname, 0);
 			} else if (target_if->ifmode == IAP_MODE) {
@@ -3509,20 +3527,24 @@ wl_ext_enable_iface(struct net_device *dev, char *ifname, int wait_up)
 
 	wl_ext_wait_other_enabling(apsta_params, cur_if);
 
-	wl_ext_move_cur_channel(apsta_params, dev, cur_if);
-#ifdef WL_ESCAN
-	if (wl_ext_master_if(cur_if) && !cur_if->channel && apsta_params->acs) {
-		uint16 chan_2g = 0, chan_5g = 0;
-		uint auto_band = WLC_BAND_INVALID;
-		wl_ext_get_2g5g_chan(cur_if->dev, &chan_2g, &chan_5g, TRUE);
-		if (chan_2g && (apsta_params->acs == WLC_BAND_2G || !chan_5g))
-			auto_band = WLC_BAND_2G;
-		else if (chan_5g && (apsta_params->acs == WLC_BAND_5G || !chan_2g))
-			auto_band = WLC_BAND_5G;
-		if (auto_band != WLC_BAND_INVALID)
-			cur_if->channel = wl_ext_autochannel(cur_if->dev, auto_band);
+	if (wl_ext_master_if(cur_if) && apsta_params->acs) {
+		uint16 chan_2g, chan_5g;
+		uint auto_band;
+		auto_band = WL_GET_BAND(cur_if->channel);
+		wl_ext_get_default_chan(cur_if->dev, &chan_2g, &chan_5g, TRUE);
+		if ((chan_2g && auto_band == WLC_BAND_2G) ||
+				(chan_5g && auto_band == WLC_BAND_5G)) {
+			cur_if->channel = wl_ext_autochannel(cur_if->dev, apsta_params->acs,
+				auto_band);
+		} else {
+			AEXT_ERROR(ifname, "invalid channel\n");
+			ret = -1;
+			goto exit;
+		}
 	}
-#endif /* WL_ESCAN */
+
+	wl_ext_move_cur_channel(apsta_params, cur_if);
+
 	if (wl_ext_master_if(cur_if) && !cur_if->channel) {
 		AEXT_ERROR(ifname, "skip channel 0\n");
 		ret = -1;
@@ -3543,7 +3565,7 @@ wl_ext_enable_iface(struct net_device *dev, char *ifname, int wait_up)
 		wl_clr_isam_status(cur_if, AP_CREATED);
 	}
 
-	wl_ext_move_other_channel(apsta_params, dev, cur_if);
+	wl_ext_move_other_channel(apsta_params, cur_if);
 
 	if (cur_if->ifidx > 0) {
 		wl_ext_iovar_setbuf(cur_if->dev, "cur_etheraddr", (u8 *)cur_if->dev->dev_addr,
@@ -3672,6 +3694,7 @@ wl_ext_enable_iface(struct net_device *dev, char *ifname, int wait_up)
 			wl_get_isam_status(cur_if, AP_CREATED),
 			msecs_to_jiffies(MAX_AP_LINK_WAIT_TIME));
 		if (timeout <= 0 || !wl_get_isam_status(cur_if, AP_CREATED)) {
+			mutex_unlock(&apsta_params->usr_sync);
 			wl_ext_disable_iface(dev, cur_if->ifname);
 			WL_MSG(ifname, "[%c] failed to enable with SSID: \"%s\"\n",
 				cur_if->prefix, cur_if->ssid);
@@ -3881,11 +3904,14 @@ wl_ext_iapsta_update_channel(dhd_pub_t *dhd, struct net_device *dev,
 	if (cur_if) {
 		wl_ext_isam_status(cur_if->dev, NULL, 0);
 		cur_if->channel = channel;
-		channel = wl_ext_move_cur_channel(apsta_params,
-			apsta_params->if_info[IF_PIF].dev, cur_if);
+		if (wl_ext_master_if(cur_if) && apsta_params->acs) {
+			uint auto_band = WL_GET_BAND(channel);
+			cur_if->channel = wl_ext_autochannel(cur_if->dev, apsta_params->acs,
+				auto_band);
+		}
+		channel = wl_ext_move_cur_channel(apsta_params, cur_if);
 		if (channel)
-			wl_ext_move_other_channel(apsta_params,
-				apsta_params->if_info[IF_PIF].dev, cur_if);
+			wl_ext_move_other_channel(apsta_params, cur_if);
 		if (cur_if->ifmode == ISTA_MODE)
 			wl_set_isam_status(cur_if, STA_CONNECTING);
 	}
@@ -3911,7 +3937,7 @@ wl_ext_iapsta_update_iftype(struct net_device *net, int ifidx, int wl_iftype)
 			cur_if->ifmode = ISTA_MODE;
 			cur_if->prio = PRIO_STA;
 			cur_if->prefix = 'S';
-		} else if (wl_iftype == WL_IF_TYPE_AP) {
+		} else if (wl_iftype == WL_IF_TYPE_AP && cur_if->ifmode != IMESH_MODE) {
 			cur_if->ifmode = IAP_MODE;
 			cur_if->prio = PRIO_AP;
 			cur_if->prefix = 'A';
@@ -3975,12 +4001,13 @@ wl_ext_iapsta_alive_postinit(struct net_device *dev)
 {
 	struct dhd_pub *dhd = dhd_get_pub(dev);
 	struct wl_apsta_params *apsta_params = dhd->iapsta_params;
-	s32 apsta = 0;
+	s32 apsta = 0, ap = 0;
 	struct wl_if_info *cur_if;
 	int i;
 
 	wl_ext_iovar_getint(dev, "apsta", &apsta);
-	if (apsta == 1) {
+	wl_ext_ioctl(dev, WLC_GET_AP, &ap, sizeof(ap), 0);
+	if (apsta == 1 || ap == 0) {
 		apsta_params->apstamode = ISTAONLY_MODE;
 		apsta_params->if_info[IF_PIF].ifmode = ISTA_MODE;
 		op_mode = DHD_FLAG_STA_MODE;
@@ -4066,7 +4093,7 @@ wl_ext_iapsta_postinit(struct net_device *net, struct wl_if_info *cur_if)
 		apsta_params->rsdb = wl_ext_iapsta_get_rsdb(net, dhd);
 		apsta_params->vsdb = FALSE;
 		apsta_params->csa = 0;
-		apsta_params->acs = WLC_BAND_2G;
+		apsta_params->acs = 0;
 		apsta_params->radar = wl_ext_radar_detect(net);
 		if (dhd->conf->fw_type == FW_TYPE_MESH) {
 			apsta_params->csa |= (CSA_FW_BIT | CSA_DRV_BIT);
@@ -4383,7 +4410,7 @@ wl_ext_mkeep_alive(struct net_device *dev, char *data, char *command,
 			AEXT_ERROR(dev->name, "Failed to allocate buffer of %d bytes\n", WLC_IOCTL_SMLEN);
 			goto exit;
 		}
-		packet = kmalloc(total_len, GFP_KERNEL);
+		packet = kmalloc(WLC_IOCTL_SMLEN, GFP_KERNEL);
 		if (packet == NULL) {
 			AEXT_ERROR(dev->name, "Failed to allocate buffer of %d bytes\n", WLC_IOCTL_SMLEN);
 			goto exit;
@@ -5555,6 +5582,9 @@ wl_android_ext_priv_cmd(struct net_device *net, char *command,
 	else if (strnicmp(command, CMD_ISAM_STATUS, strlen(CMD_ISAM_STATUS)) == 0) {
 		*bytes_written = wl_ext_isam_status(net, command, total_len);
 	}
+	else if (strnicmp(command, CMD_ISAM_PARAM, strlen(CMD_ISAM_PARAM)) == 0) {
+		*bytes_written = wl_ext_isam_param(net, command, total_len);
+	}
 #endif /* WL_EXT_IAPSTA */
 #ifdef WL_CFG80211
 	else if (strnicmp(command, CMD_AUTOCHANNEL, strlen(CMD_AUTOCHANNEL)) == 0) {
@@ -5777,14 +5807,135 @@ exit:
 }
 #endif /* WL_CFG80211 || WL_ESCAN */
 
+#define APCS_MAX_RETRY		10
+static int
+wl_ext_fw_apcs(struct net_device *dev, uint32 band)
+{
+	int channel = 0, chosen = 0, retry = 0, ret = 0, spect = 0;
+	u8 *reqbuf = NULL;
+	uint32 buf_size;
+
+	ret = wldev_ioctl_get(dev, WLC_GET_SPECT_MANAGMENT, &spect, sizeof(spect));
+	if (ret) {
+		AEXT_ERROR(dev->name, "ACS: error getting the spect, ret=%d\n", ret);
+		goto done;
+	}
+
+	if (spect > 0) {
+		ret = wl_cfg80211_set_spect(dev, 0);
+		if (ret < 0) {
+			AEXT_ERROR(dev->name, "ACS: error while setting spect, ret=%d\n", ret);
+			goto done;
+		}
+	}
+
+	reqbuf = kmalloc(CHANSPEC_BUF_SIZE, GFP_KERNEL);
+	if (reqbuf == NULL) {
+		AEXT_ERROR(dev->name, "failed to allocate chanspec buffer\n");
+		goto done;
+	}
+	memset(reqbuf, 0, CHANSPEC_BUF_SIZE);
+
+	if (band == WLC_BAND_AUTO) {
+		AEXT_INFO(dev->name, "ACS full channel scan \n");
+		reqbuf[0] = htod32(0);
+	} else if (band == WLC_BAND_5G) {
+		AEXT_INFO(dev->name, "ACS 5G band scan \n");
+		if ((ret = wl_cfg80211_get_chanspecs_5g(dev, reqbuf, CHANSPEC_BUF_SIZE)) < 0) {
+			AEXT_ERROR(dev->name, "ACS 5g chanspec retreival failed! \n");
+			goto done;
+		}
+	} else if (band == WLC_BAND_2G) {
+		/*
+		 * If channel argument is not provided/ argument 20 is provided,
+		 * Restrict channel to 2GHz, 20MHz BW, No SB
+		 */
+		AEXT_INFO(dev->name, "ACS 2G band scan \n");
+		if ((ret = wl_cfg80211_get_chanspecs_2g(dev, reqbuf, CHANSPEC_BUF_SIZE)) < 0) {
+			AEXT_ERROR(dev->name, "ACS 2g chanspec retreival failed! \n");
+			goto done;
+		}
+	} else {
+		AEXT_ERROR(dev->name, "ACS: No band chosen\n");
+		goto done;
+	}
+
+	buf_size = (band == WLC_BAND_AUTO) ? sizeof(int) : CHANSPEC_BUF_SIZE;
+	ret = wldev_ioctl_set(dev, WLC_START_CHANNEL_SEL, (void *)reqbuf,
+		buf_size);
+	if (ret < 0) {
+		AEXT_ERROR(dev->name, "can't start auto channel scan, err = %d\n", ret);
+		channel = 0;
+		goto done;
+	}
+
+	/* Wait for auto channel selection, max 3000 ms */
+	if ((band == WLC_BAND_2G) || (band == WLC_BAND_5G)) {
+		OSL_SLEEP(500);
+	} else {
+		/*
+		 * Full channel scan at the minimum takes 1.2secs
+		 * even with parallel scan. max wait time: 3500ms
+		 */
+		OSL_SLEEP(1000);
+	}
+
+	retry = APCS_MAX_RETRY;
+	while (retry--) {
+		ret = wldev_ioctl_get(dev, WLC_GET_CHANNEL_SEL, &chosen,
+			sizeof(chosen));
+		if (ret < 0) {
+			chosen = 0;
+		} else {
+			chosen = dtoh32(chosen);
+		}
+
+		if (chosen) {
+			int chosen_band;
+			int apcs_band;
+#ifdef D11AC_IOTYPES
+			if (wl_cfg80211_get_ioctl_version() == 1) {
+				channel = LCHSPEC_CHANNEL((chanspec_t)chosen);
+			} else {
+				channel = CHSPEC_CHANNEL((chanspec_t)chosen);
+			}
+#else
+			channel = CHSPEC_CHANNEL((chanspec_t)chosen);
+#endif /* D11AC_IOTYPES */
+			apcs_band = (band == WLC_BAND_AUTO) ? WLC_BAND_2G : band;
+			chosen_band = (channel <= CH_MAX_2G_CHANNEL) ? WLC_BAND_2G : WLC_BAND_5G;
+			if (apcs_band == chosen_band) {
+				WL_MSG(dev->name, "selected channel = %d\n", channel);
+				break;
+			}
+		}
+		AEXT_INFO(dev->name, "%d tried, ret = %d, chosen = 0x%x\n",
+			(APCS_MAX_RETRY - retry), ret, chosen);
+		OSL_SLEEP(250);
+	}
+
+done:
+	if (spect > 0) {
+		if ((ret = wl_cfg80211_set_spect(dev, spect) < 0)) {
+			AEXT_ERROR(dev->name, "ACS: error while setting spect\n");
+		}
+	}
+
+	if (reqbuf) {
+		kfree(reqbuf);
+	}
+
+	return channel;
+}
+
 #ifdef WL_ESCAN
 int
-wl_ext_autochannel(struct net_device *dev, uint32 band)
+wl_ext_drv_apcs(struct net_device *dev, uint32 band)
 {
+	int ret = 0, channel = 0;
 	struct dhd_pub *dhd = dhd_get_pub(dev);
-	wlc_ssid_t ssid;
 	struct wl_escan_info *escan = NULL;
-	int ret = 0, retry = 0, retry_max, retry_interval = 250, channel = 0, up = 1;
+	int retry = 0, retry_max, retry_interval = 250, up = 1;
 #ifdef WL_CFG80211
 	struct bcm_cfg80211 *cfg = wl_get_cfg(dev);
 #endif /* WL_CFG80211 */
@@ -5792,25 +5943,23 @@ wl_ext_autochannel(struct net_device *dev, uint32 band)
 	escan = dhd->escan;
 	if (dhd) {
 		retry_max = WL_ESCAN_TIMER_INTERVAL_MS/retry_interval;
-		memset(&ssid, 0, sizeof(ssid));
 		ret = wldev_ioctl_get(dev, WLC_GET_UP, &up, sizeof(s32));
 		if (ret < 0 || up == 0) {
 			ret = wldev_ioctl_set(dev, WLC_UP, &up, sizeof(s32));
 		}
 		retry = retry_max;
 		while (retry--) {
+			if (escan->escan_state == ESCAN_STATE_SCANING
 #ifdef WL_CFG80211
-			if (wl_get_drv_status_all(cfg, SCANNING) ||
-					escan->escan_state == ESCAN_STATE_SCANING)
-#else
-			if (escan->escan_state == ESCAN_STATE_SCANING)
+				|| wl_get_drv_status_all(cfg, SCANNING)
 #endif
+			)
 			{
 				AEXT_INFO(dev->name, "Scanning %d tried, ret = %d\n",
 					(retry_max - retry), ret);
 			} else {
 				escan->autochannel = 1;
-				ret = wl_escan_set_scan(dev, dhd, &ssid, 0, TRUE);
+				ret = wl_escan_set_scan(dev, dhd, NULL, 0, TRUE);
 				if (!ret)
 					break;
 			}
@@ -5843,6 +5992,41 @@ done:
 	return channel;
 }
 #endif /* WL_ESCAN */
+
+int
+wl_ext_autochannel(struct net_device *dev, uint acs, uint32 band)
+{
+	int ret = 0, channel = 0;
+	uint16 chan_2g, chan_5g;
+
+	AEXT_INFO(dev->name, "acs=0x%x, band=%d \n", acs, band);
+
+	if (acs & ACS_FW_BIT) {
+		ret = wldev_ioctl_get(dev, WLC_GET_CHANNEL_SEL, &channel, sizeof(channel));
+		channel = 0;
+		if (ret != BCME_UNSUPPORTED)
+			channel = wl_ext_fw_apcs(dev, band);
+		if (channel)
+			return channel;
+	}
+
+#ifdef WL_ESCAN
+	if (acs & ACS_DRV_BIT)
+		channel = wl_ext_drv_apcs(dev, band);
+#endif /* WL_ESCAN */
+
+	if (channel == 0) {
+		wl_ext_get_default_chan(dev, &chan_2g, &chan_5g, TRUE);
+		if (band == WLC_BAND_5G) {
+			channel = chan_5g;
+		} else {
+			channel = chan_2g;
+		}
+		AEXT_ERROR(dev->name, "ACS failed. Fall back to default channel (%d) \n", channel);
+	}
+
+	return channel;
+}
 
 #if defined(RSSIAVG)
 void

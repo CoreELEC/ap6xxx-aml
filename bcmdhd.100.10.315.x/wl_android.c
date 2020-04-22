@@ -3078,13 +3078,11 @@ wl_android_set_auto_channel(struct net_device *dev, const char* cmd_str,
 		goto done2;
 	}
 
-#ifdef WL_ESCAN
-	channel = wl_ext_autochannel(dev, band);
+	channel = wl_ext_autochannel(dev, ACS_FW_BIT|ACS_DRV_BIT, band);
 	if (channel)
 		goto done2;
 	else
 		goto done;
-#endif /* WL_ESCAN */
 
 	ret = wldev_ioctl_get(dev, WLC_GET_SPECT_MANAGMENT, &spect, sizeof(spect));
 	if (ret) {
@@ -3877,7 +3875,7 @@ wl_android_set_rps_cpus(struct net_device *dev, char *command)
 	enable = command[strlen(CMD_RPSMODE) + 1] - '0';
 	error = dhd_rps_cpus_enable(dev, enable);
 
-#if defined(DHDTCPACK_SUPPRESS) && defined(BCMPCIE) && defined(WL_CFG80211)
+#if 0 //defined(DHDTCPACK_SUPPRESS) && defined(BCMPCIE) && defined(WL_CFG80211)
 	if (!error) {
 		void *dhdp = wl_cfg80211_get_dhdp(net);
 		if (enable) {
