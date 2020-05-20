@@ -122,7 +122,6 @@ enum in_suspend_flags {
 };
 
 enum in_suspend_mode {
-	AUTO_SUSPEND = -1,
 	EARLY_SUSPEND = 0,
 	PM_NOTIFIER = 1
 };
@@ -154,6 +153,10 @@ enum eapol_status {
 typedef struct dhd_conf {
 	uint chip;
 	uint chiprev;
+#ifdef GET_OTP_MODULE_NAME
+	char module_name[16];
+#endif
+	struct ether_addr otp_mac;
 	int fw_type;
 #ifdef BCMSDIO
 	wl_mac_list_ctrl_t fw_by_mac;
@@ -271,21 +274,23 @@ typedef struct dhd_conf {
 } dhd_conf_t;
 
 #ifdef BCMSDIO
-int dhd_conf_get_mac(dhd_pub_t *dhd, bcmsdh_info_t *sdh, si_t *sih, uint8 *mac);
+void dhd_conf_get_otp(dhd_pub_t *dhd, bcmsdh_info_t *sdh, si_t *sih);
 #if defined(HW_OOB) || defined(FORCE_WOWLAN)
 void dhd_conf_set_hw_oob_intr(bcmsdh_info_t *sdh, struct si_pub *sih);
 #endif
 void dhd_conf_set_txglom_params(dhd_pub_t *dhd, bool enable);
 int dhd_conf_set_blksize(bcmsdh_info_t *sdh);
 #endif
-void dhd_conf_set_path_params(dhd_pub_t *dhd, void *sdh, void *sih,
-	char *fw_path, char *nv_path);
+void dhd_conf_set_path_params(dhd_pub_t *dhd, char *fw_path, char *nv_path);
 int dhd_conf_set_intiovar(dhd_pub_t *dhd, uint cmd, char *name, int val,
 	int def, bool down);
 int dhd_conf_get_band(dhd_pub_t *dhd);
 int dhd_conf_set_country(dhd_pub_t *dhd, wl_country_t *cspec);
 int dhd_conf_get_country(dhd_pub_t *dhd, wl_country_t *cspec);
 int dhd_conf_map_country_list(dhd_pub_t *dhd, wl_country_t *cspec);
+#ifdef CCODE_LIST
+int dhd_ccode_map_country_list(dhd_pub_t *dhd, wl_country_t *cspec);
+#endif
 int dhd_conf_fix_country(dhd_pub_t *dhd);
 bool dhd_conf_match_channel(dhd_pub_t *dhd, uint32 channel);
 void dhd_conf_set_wme(dhd_pub_t *dhd, int ifidx, int mode);
@@ -311,7 +316,7 @@ void dhd_conf_set_garp(dhd_pub_t *dhd, int ifidx, uint32 ipa, bool enable);
 int dhd_conf_get_disable_proptx(dhd_pub_t *dhd);
 #endif
 uint dhd_conf_get_insuspend(dhd_pub_t *dhd, uint mask);
-int dhd_conf_set_suspend_resume(dhd_pub_t *dhd, int suspend, int suspend_mode);
+int dhd_conf_set_suspend_resume(dhd_pub_t *dhd, int suspend);
 void dhd_conf_postinit_ioctls(dhd_pub_t *dhd);
 int dhd_conf_preinit(dhd_pub_t *dhd);
 int dhd_conf_reset(dhd_pub_t *dhd);

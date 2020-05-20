@@ -82,6 +82,29 @@ typedef struct _compat_android_wifi_priv_cmd {
 		} \
 	} while (0)
 
+#define WL_MSG_PRINT_RATE_LIMIT_PERIOD 1000000000u /* 1s in units of ns */
+#define WL_MSG_RLMT(name, cmp, size, arg1, args...) \
+do {	\
+	if (android_msg_level & ANDROID_MSG_LEVEL) {	\
+		static uint64 __err_ts = 0; \
+		static uint32 __err_cnt = 0; \
+		uint64 __cur_ts = 0; \
+		static uint8 static_tmp[size]; \
+		__cur_ts = local_clock(); \
+		if (__err_ts == 0 || (__cur_ts > __err_ts && \
+		(__cur_ts - __err_ts > WL_MSG_PRINT_RATE_LIMIT_PERIOD)) || \
+		memcmp(&static_tmp, cmp, size)) { \
+			__err_ts = __cur_ts; \
+			memcpy(static_tmp, cmp, size); \
+			printk(KERN_ERR "[dhd-%s] %s : [%u times] " arg1, \
+				name, __func__, __err_cnt, ## args); \
+			__err_cnt = 0; \
+		} else { \
+			++__err_cnt; \
+		} \
+	}	\
+} while (0)
+
 /**
  * wl_android_init will be called from module init function (dhd_module_init now), similarly
  * wl_android_exit will be called from module exit function (dhd_module_cleanup now)
@@ -105,6 +128,7 @@ void wl_ext_iapsta_dettach(dhd_pub_t *pub);
 #ifdef WL_CFG80211
 u32 wl_ext_iapsta_update_channel(dhd_pub_t *dhd, struct net_device *dev, u32 channel);
 void wl_ext_iapsta_update_iftype(struct net_device *net, int ifidx, int wl_iftype);
+bool wl_ext_iapsta_iftype_enabled(struct net_device *net, int wl_iftype);
 void wl_ext_iapsta_ifadding(struct net_device *net, int ifidx);
 bool wl_ext_iapsta_mesh_creating(struct net_device *net);
 #endif
@@ -330,7 +354,7 @@ int wl_update_rssi_offset(struct net_device *net, int rssi);
 typedef struct wl_bss_cache {
 	struct wl_bss_cache *next;
 	int dirty;
-	struct timeval tv;
+	struct osl_timespec tv;
 	wl_scan_results_t results;
 } wl_bss_cache_t;
 

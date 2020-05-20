@@ -62,19 +62,19 @@ uint iw_msg_level = WL_ERROR_LEVEL;
 #define WL_TRACE_MSG(x, args...) \
 	do { \
 		if (iw_msg_level & WL_TRACE_LEVEL) { \
-			printk(KERN_ERR "[dhd] WEXT-TRACE) %s : " x, __func__, ## args); \
+			printk(KERN_INFO "[dhd] WEXT-TRACE) %s : " x, __func__, ## args); \
 		} \
 	} while (0)
 #define WL_SCAN_MSG(x, args...) \
 	do { \
 		if (iw_msg_level & WL_SCAN_LEVEL) { \
-			printk(KERN_ERR "[dhd] WEXT-SCAN) %s : " x, __func__, ## args); \
+			printk(KERN_INFO "[dhd] WEXT-SCAN) %s : " x, __func__, ## args); \
 		} \
 	} while (0)
 #define WL_WSEC_MSG(x, args...) \
 	do { \
 		if (iw_msg_level & WL_WSEC_LEVEL) { \
-			printk(KERN_ERR "[dhd] WEXT-WSEC) %s : " x, __func__, ## args); \
+			printk(KERN_INFO "[dhd] WEXT-WSEC) %s : " x, __func__, ## args); \
 		} \
 	} while (0)
 #define WL_ERROR(x) WL_ERROR_MSG x
@@ -3749,7 +3749,8 @@ wl_iw_event(struct net_device *dev, struct wl_wext_info *wext_info,
 	case WLC_E_DEAUTH:
 	case WLC_E_DISASSOC:
 		wl_iw_update_connect_status(dev, WL_EXT_STATUS_DISCONNECTED);
-		WL_MSG(dev->name, "disconnected with "MACSTR", event %d, reason %d\n",
+		WL_MSG_RLMT(dev->name, &e->addr, ETHER_ADDR_LEN,
+			"disconnected with "MACSTR", event %d, reason %d\n",
 			MAC2STR((u8 *)wrqu.addr.sa_data), event_type, reason);
 		break;
 	case WLC_E_DEAUTH_IND:
@@ -3973,7 +3974,7 @@ int wl_iw_get_wireless_stats(struct net_device *dev, struct iw_statistics *wstat
 
 	phy_noise = 0;
 	if ((res = dev_wlc_ioctl(dev, WLC_GET_PHY_NOISE, &phy_noise, sizeof(phy_noise)))) {
-		WL_ERROR(("WLC_GET_PHY_NOISE error=%d\n", res));
+		WL_TRACE(("WLC_GET_PHY_NOISE error=%d\n", res));
 		goto done;
 	}
 

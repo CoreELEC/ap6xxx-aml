@@ -1389,6 +1389,10 @@ typedef struct dhd_pub {
 	void *pktcnts;
 #endif /* DHD_PKTDUMP_ROAM */
 	bool disable_dtim_in_suspend;	/* Disable set bcn_li_dtim in suspend */
+#ifdef CSI_SUPPORT
+	struct list_head csi_list;
+	int csi_count;
+#endif /* CSI_SUPPORT */
 	char *clm_path;		/* module_param: path to clm vars file */
 	char *conf_path;		/* module_param: path to config vars file */
 	struct dhd_conf *conf;	/* Bus module handle */

@@ -74,9 +74,24 @@ struct bcm_cfg80211;
 struct wl_security;
 struct wl_ibss;
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0) && !defined(WL_SAE))
-#define WL_SAE
-#endif // endif
+#if !defined(WL_CLIENT_SAE) && (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0))
+#define WL_CLIENT_SAE
+#endif
+#if defined(WL_SAE) && (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0))
+#error "Can not support WL_SAE befor kernel 3.14"
+#endif
+#if defined(WL_CLIENT_SAE) && (LINUX_VERSION_CODE < KERNEL_VERSION(4, 17, 0))
+#error "Can not support WL_CLIENT_SAE before kernel 4.17"
+#endif
+#if defined(WL_CLIENT_SAE) && defined(WL_SAE)
+#error "WL_SAE is for dongle-offload and WL_CLIENT_SAE is for wpa_supplicant. Please choose one."
+#endif
+
+#if defined(WL_CLIENT_SAE)
+#ifndef WL_ASSOC_MGR_CMD_SEND_AUTH
+#define WL_ASSOC_MGR_CMD_SEND_AUTH 3
+#endif /* WL_ASSOC_MGR_CMD_SEND_AUTH */
+#endif
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0) && !defined(WL_SCAN_TYPE))
 #define WL_SCAN_TYPE
@@ -381,6 +396,8 @@ do {									\
 #ifndef WLAN_AKM_SUITE_FT_PSK
 #define WLAN_AKM_SUITE_FT_PSK			0x000FAC04
 #endif /* WLAN_AKM_SUITE_FT_PSK */
+
+#define WLAN_AKM_SUITE_SAE_SHA256	0x000FAC08
 
 #ifndef WLAN_AKM_SUITE_8021X_SUITE_B
 #define WLAN_AKM_SUITE_8021X_SUITE_B		0x000FAC0B

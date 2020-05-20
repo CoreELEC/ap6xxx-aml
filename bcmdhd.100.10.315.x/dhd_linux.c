@@ -111,6 +111,10 @@
 #include <dhd_rtt.h>
 #endif // endif
 
+#ifdef CSI_SUPPORT
+#include <dhd_csi.h>
+#endif /* CSI_SUPPORT */
+
 #ifdef CONFIG_COMPAT
 #include <linux/compat.h>
 #endif // endif
@@ -884,21 +888,25 @@ static int dhd_pm_callback(struct notifier_block *nfb, unsigned long action, voi
 #if defined(SUPPORT_P2P_GO_PS) && defined(PROP_TXSTATUS)
 		dhd_wlfc_suspend(&dhdinfo->pub);
 #endif /* defined(SUPPORT_P2P_GO_PS) && defined(PROP_TXSTATUS) */
-		dhd_conf_set_suspend_resume(&dhdinfo->pub, suspend, PM_NOTIFIER);
+		if (dhdinfo->pub.conf->suspend_mode == PM_NOTIFIER)
+			dhd_conf_set_suspend_resume(&dhdinfo->pub, suspend);
 		DHD_OS_WAKE_LOCK_RESTORE(&dhdinfo->pub);
 	} else {
-		dhd_conf_set_suspend_resume(&dhdinfo->pub, suspend, PM_NOTIFIER);
+		if (dhdinfo->pub.conf->suspend_mode == PM_NOTIFIER)
+			dhd_conf_set_suspend_resume(&dhdinfo->pub, suspend);
 #if defined(SUPPORT_P2P_GO_PS) && defined(PROP_TXSTATUS)
 		dhd_wlfc_resume(&dhdinfo->pub);
 #endif /* defined(SUPPORT_P2P_GO_PS) && defined(PROP_TXSTATUS) */
 		if (dhdinfo->pub.conf->suspend_mode == PM_NOTIFIER)
 			dhd_suspend_resume_helper(dhdinfo, suspend, 0);
 	}
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && (LINUX_VERSION_CODE <= \
         KERNEL_VERSION(2, 6, 39))
 	dhd_mmc_suspend = suspend;
 	smp_mb();
 #endif
+
 	return ret;
 }
 
@@ -2104,9 +2112,7 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 			dhd->sroamed = FALSE;
 #endif /* CONFIG_SILENT_ROAM */
 #endif /* DHD_USE_EARLYSUSPEND */
-			dhd_conf_set_suspend_resume(dhd, value, EARLY_SUSPEND);
 		} else {
-			dhd_conf_set_suspend_resume(dhd, value, EARLY_SUSPEND);
 #ifdef PKT_FILTER_SUPPORT
 			dhd->early_suspended = 0;
 #endif // endif
@@ -2313,8 +2319,10 @@ static void dhd_early_suspend(struct early_suspend *h)
 	struct dhd_info *dhd = container_of(h, struct dhd_info, early_suspend);
 	DHD_TRACE_HW4(("%s: enter\n", __FUNCTION__));
 
-	if (dhd)
+	if (dhd && dhd->pub.conf->suspend_mode == EARLY_SUSPEND) {
 		dhd_suspend_resume_helper(dhd, 1, 0);
+		dhd_conf_set_suspend_resume(&dhd->pub, 1);
+	}
 }
 
 static void dhd_late_resume(struct early_suspend *h)
@@ -2322,8 +2330,10 @@ static void dhd_late_resume(struct early_suspend *h)
 	struct dhd_info *dhd = container_of(h, struct dhd_info, early_suspend);
 	DHD_TRACE_HW4(("%s: enter\n", __FUNCTION__));
 
-	if (dhd)
+	if (dhd && dhd->pub.conf->suspend_mode == EARLY_SUSPEND) {
+		dhd_conf_set_suspend_resume(&dhd->pub, 0);
 		dhd_suspend_resume_helper(dhd, 0, 0);
+	}
 }
 #endif /* CONFIG_HAS_EARLYSUSPEND && DHD_USE_EARLYSUSPEND */
 
@@ -3837,13 +3847,13 @@ __dhd_txflowcontrol(dhd_pub_t *dhdp, struct net_device *net, bool state)
 		netif_stop_queue(net);
 		dhd_prot_update_pktid_txq_stop_cnt(dhdp);
 	} else if (state == ON) {
-		DHD_ERROR(("%s: Netif Queue has already stopped\n", __FUNCTION__));
+		DHD_INFO(("%s: Netif Queue has already stopped\n", __FUNCTION__));
 	}
 	if ((state == OFF) && (dhdp->txoff == TRUE)) {
 		netif_wake_queue(net);
 		dhd_prot_update_pktid_txq_start_cnt(dhdp);
 	} else if (state == OFF) {
-		DHD_ERROR(("%s: Netif Queue has already started\n", __FUNCTION__));
+		DHD_INFO(("%s: Netif Queue has already started\n", __FUNCTION__));
 	}
 }
 
@@ -4752,7 +4762,13 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan)
 				continue;
 			}
 
-			if (dhdp->wl_event_enabled) {
+#ifdef SENDPROB
+			if (dhdp->wl_event_enabled ||
+				(dhdp->recv_probereq && (event.event_type == WLC_E_PROBREQ_MSG)))
+#else
+			if (dhdp->wl_event_enabled)
+#endif
+			{
 #ifdef DHD_USE_STATIC_CTRLBUF
 				/* If event bufs are allocated via static buf pool
 				 * and wl events are enabled, make a copy, free the
@@ -6424,10 +6440,12 @@ dhd_ioctl_entry(struct net_device *net, struct ifreq *ifr, int cmd)
 		}
 	}
 
+#ifndef CONFIG_VTS_SUPPORT
 	if (!capable(CAP_NET_ADMIN)) {
 		bcmerror = BCME_EPERM;
 		goto done;
 	}
+#endif
 
 	/* Take backup of ioc.buf and restore later */
 	ioc_buf_user = ioc.buf;
@@ -8924,6 +8942,10 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen
 	dhd->dhd_state = dhd_state;
 
 	dhd_found++;
+	
+#ifdef CSI_SUPPORT
+	dhd_csi_init(&dhd->pub);
+#endif /* CSI_SUPPORT */
 
 #ifdef DHD_DUMP_MNGR
 	dhd->pub.dump_file_manage =
@@ -10765,6 +10787,9 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 #ifdef WL_ESCAN
 	setbit(eventmask, WLC_E_ESCAN_RESULT);
 #endif /* WL_ESCAN */
+#ifdef CSI_SUPPORT
+	setbit(eventmask, WLC_E_CSI);
+#endif /* CSI_SUPPORT */
 #ifdef RTT_SUPPORT
 	setbit(eventmask, WLC_E_PROXD);
 #endif /* RTT_SUPPORT */
@@ -10787,6 +10812,8 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 	setbit(eventmask, WLC_E_TRACE);
 #else
 	clrbit(eventmask, WLC_E_TRACE);
+	if (dhd->conf->chip == BCM43752_CHIP_ID)
+		setbit(eventmask, WLC_E_TRACE);
 #endif /* defined(SHOW_LOGTRACE) && defined(LOGTRACE_FROM_FILE) */
 
 	setbit(eventmask, WLC_E_CSA_COMPLETE_IND);
@@ -10859,6 +10886,9 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 #ifdef WL_MBO
 		setbit(eventmask_msg->mask, WLC_E_MBO);
 #endif /* WL_MBO */
+#ifdef WL_CLIENT_SAE
+		setbit(eventmask_msg->mask, WLC_E_JOIN_START);
+#endif /* WL_CLIENT_SAE */
 #ifdef WL_BCNRECV
 		setbit(eventmask_msg->mask, WLC_E_BCNRECV_ABORTED);
 #endif /* WL_BCNRECV */
@@ -12228,6 +12258,10 @@ void dhd_detach(dhd_pub_t *dhdp)
 	}
 #endif /* DHD_LB */
 
+#ifdef CSI_SUPPORT
+	dhd_csi_deinit(dhdp);
+#endif /* CSI_SUPPORT */
+
 #if defined(DNGL_AXI_ERROR_LOGGING) && defined(DHD_USE_WQ_FOR_DNGL_AXI_ERROR)
 	cancel_work_sync(&dhd->axi_error_dispatcher_work);
 #endif /* DNGL_AXI_ERROR_LOGGING && DHD_USE_WQ_FOR_DNGL_AXI_ERROR */
@@ -13494,7 +13528,9 @@ int net_os_set_suspend(struct net_device *dev, int val, int force)
 	int ret = 0;
 	dhd_info_t *dhd = DHD_DEV_INFO(dev);
 
-	if (dhd) {
+	if (dhd && dhd->pub.conf->suspend_mode == EARLY_SUSPEND) {
+		if (!val)
+			dhd_conf_set_suspend_resume(&dhd->pub, val);
 #ifdef CONFIG_MACH_UNIVERSAL7420
 #endif /* CONFIG_MACH_UNIVERSAL7420 */
 #if defined(CONFIG_HAS_EARLYSUSPEND) && defined(DHD_USE_EARLYSUSPEND)
@@ -13505,6 +13541,8 @@ int net_os_set_suspend(struct net_device *dev, int val, int force)
 #ifdef WL_CFG80211
 		wl_cfg80211_update_power_mode(dev);
 #endif // endif
+		if (val)
+			dhd_conf_set_suspend_resume(&dhd->pub, val);
 	}
 	return ret;
 }

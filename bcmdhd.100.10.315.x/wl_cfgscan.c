@@ -1890,7 +1890,7 @@ wl_cfg80211_scan(struct wiphy *wiphy, struct net_device *ndev,
 			 return -ENODEV;
 		}
 	}
-	err = wl_cfg80211_check_in4way(cfg, ndev, NO_SCAN_IN4WAY,
+	err = wl_cfg80211_check_in4way(cfg, ndev_to_wlc_ndev(ndev, cfg), NO_SCAN_IN4WAY,
 		WL_EXT_STATUS_SCAN, NULL);
 	if (err)
 		return err;
@@ -2731,12 +2731,12 @@ static void wl_scan_timeout(unsigned long data)
 		dhdp->memdump_type = DUMP_TYPE_SCAN_TIMEOUT;
 		dhd_bus_mem_dump(dhdp);
 	}
+#endif /* DHD_FW_COREDUMP */
 	/*
 	 * For the memdump sanity, blocking bus transactions for a while
 	 * Keeping it TRUE causes the sequential private cmd error
 	 */
 	dhdp->scan_timeout_occurred = FALSE;
-#endif /* DHD_FW_COREDUMP */
 	msg.event_type = hton32(WLC_E_ESCAN_RESULT);
 	msg.status = hton32(WLC_E_STATUS_TIMEOUT);
 	msg.reason = 0xFFFFFFFF;

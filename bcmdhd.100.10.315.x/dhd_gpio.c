@@ -186,8 +186,6 @@ static int dhd_wlan_get_mac_addr(unsigned char *buf
 {
 	int err = 0;
 
-#ifdef EXAMPLE_GET_MAC
-	/* EXAMPLE code */
 #ifdef CUSTOM_MULTI_MAC
 	if (!strcmp("wlan1", name)) {
 #ifdef CUSTOM_AP_MAC
@@ -203,7 +201,7 @@ static int dhd_wlan_get_mac_addr(unsigned char *buf
 		err = -1;
 #endif
 	} else
-#endif
+#endif /* CUSTOM_MULTI_MAC */
 	{
 		bcopy((char *)wifi_get_mac(), buf, sizeof(struct ether_addr));
 		if (buf[0] == 0xff) {
@@ -214,7 +212,7 @@ static int dhd_wlan_get_mac_addr(unsigned char *buf
 				buf[0], buf[1], buf[2],
 				buf[3], buf[4], buf[5]);
 	}
-#endif /* EXAMPLE_GET_MAC */
+
 #ifdef EXAMPLE_GET_MAC_VER2
 	/* EXAMPLE code */
 	{

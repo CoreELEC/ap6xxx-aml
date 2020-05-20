@@ -16,19 +16,19 @@
 #define ESCAN_TRACE(name, arg1, args...) \
 	do { \
 		if (android_msg_level & ANDROID_TRACE_LEVEL) { \
-			printk(KERN_ERR "[dhd-%s] ESCAN-TRACE) %s : " arg1, name, __func__, ## args); \
+			printk(KERN_INFO "[dhd-%s] ESCAN-TRACE) %s : " arg1, name, __func__, ## args); \
 		} \
 	} while (0)
 #define ESCAN_SCAN(name, arg1, args...) \
 	do { \
 		if (android_msg_level & ANDROID_SCAN_LEVEL) { \
-			printk(KERN_ERR "[dhd-%s] ESCAN-SCAN) %s : " arg1, name, __func__, ## args); \
+			printk(KERN_INFO "[dhd-%s] ESCAN-SCAN) %s : " arg1, name, __func__, ## args); \
 		} \
 	} while (0)
 #define ESCAN_DBG(name, arg1, args...) \
 	do { \
 		if (android_msg_level & ANDROID_DBG_LEVEL) { \
-			printk(KERN_ERR "[dhd-%s] ESCAN-DBG) %s : " arg1, name, __func__, ## args); \
+			printk(KERN_INFO "[dhd-%s] ESCAN-DBG) %s : " arg1, name, __func__, ## args); \
 		} \
 	} while (0)
 
@@ -254,7 +254,7 @@ wl_escan_inform_bss(struct net_device *dev, struct wl_escan_info *escan)
 	wl_reset_bss_cache(&escan->g_bss_cache_ctrl);
 	if (escan->autochannel)
 		wl_ext_get_best_channel(dev, &escan->g_bss_cache_ctrl,
-			escan->ioctl_ver &escan->best_2g_ch, &escan->best_5g_ch);
+			escan->ioctl_ver, &escan->best_2g_ch, &escan->best_5g_ch);
 #else
 	if (escan->autochannel)
 		wl_ext_get_best_channel(dev, bss_list, escan->ioctl_ver,
@@ -824,8 +824,8 @@ wl_escan_set_scan(struct net_device *dev, dhd_pub_t *dhdp,
 	mutex_lock(&escan->usr_sync);
 	if (escan->escan_state == ESCAN_STATE_DOWN) {
 		ESCAN_ERROR(dev->name, "STATE is down\n");
-		err = -EIO;
-		goto exit;
+		err = -EINVAL;
+		goto exit2;
 	}
 
 	if (wl_ext_check_scan(dev, dhdp)) {
@@ -917,6 +917,7 @@ exit:
 	if (unlikely(err)) {
 		wl_escan_reset(escan);
 	}
+exit2:
 	mutex_unlock(&escan->usr_sync);
 	return err;
 }
@@ -1070,6 +1071,7 @@ wl_escan_get_scan(struct net_device *dev, dhd_pub_t *dhdp,
 #endif
 	char *buf = NULL;
 	struct ether_addr cur_bssid;
+	u8 ioctl_buf[WLC_IOCTL_SMLEN];
 
 	if (!extra) {
 		ESCAN_TRACE(dev->name, "extra is null\n");
@@ -1097,8 +1099,11 @@ wl_escan_get_scan(struct net_device *dev, dhd_pub_t *dhdp,
 
 	ESCAN_SCAN(dev->name, "SIOCGIWSCAN, len=%d\n", dwrq->length);
 
+	wldev_iovar_getbuf(dev, "cur_etheraddr", NULL, 0, ioctl_buf, WLC_IOCTL_SMLEN, NULL);
 	err = wldev_ioctl(dev, WLC_GET_BSSID, &cur_bssid, sizeof(cur_bssid), false);
-	if (err != BCME_NOTASSOCIATED && memcmp(&ether_null, &cur_bssid, ETHER_ADDR_LEN)) {
+	if (err != BCME_NOTASSOCIATED &&
+			memcmp(&ether_null, &cur_bssid, ETHER_ADDR_LEN) &&
+			memcmp(ioctl_buf, &cur_bssid, ETHER_ADDR_LEN)) {
 		// merge current connected bss
 		buf = kzalloc(WL_EXTRA_BUF_MAX, GFP_ATOMIC);
 		if (!buf) {

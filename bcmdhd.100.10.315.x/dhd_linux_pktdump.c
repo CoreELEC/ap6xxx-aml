@@ -44,8 +44,8 @@
 #include <dhd_linux_pktdump.h>
 #include <dhd_config.h>
 
-#define DHD_PKTDUMP(arg)	DHD_ERROR(arg)
-#define DHD_PKTDUMP_MEM(arg)	DHD_ERROR(arg)
+#define DHD_PKTDUMP(arg)	printk arg
+#define DHD_PKTDUMP_MEM(arg)	printk arg
 #define PACKED_STRUCT __attribute__ ((packed))
 
 #define EAPOL_HDR_LEN		4
@@ -160,7 +160,8 @@ typedef struct pkt_cnt_log {
 #define PKT_CNT_TIMER_INTERNVAL_MS		5000	/* packet count timeout(ms) */
 #define PKT_CNT_RSN_VALID(rsn)	\
 	(((rsn) > (PKT_CNT_RSN_INVALID)) && ((rsn) < (PKT_CNT_RSN_MAX)))
-/*
+
+#ifdef DHD_PKTDUMP_ROAM
 static const char pkt_cnt_msg[][20] = {
 	"INVALID",
 	"ROAM_SUCCESS",
@@ -168,7 +169,7 @@ static const char pkt_cnt_msg[][20] = {
 	"CONNECT_SUCCESS",
 	"INVALID"
 };
-*/
+#endif
 
 static const char tx_pktfate[][30] = {
 	"TX_PKT_FATE_ACKED",		/* 0: WLFC_CTL_PKTFLAG_DISCARD */
