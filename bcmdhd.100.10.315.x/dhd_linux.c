@@ -21451,6 +21451,7 @@ dhd_ring_whole_unlock(void *_ring)
 #else
 #define DHD_VFS_UNLINK(dir, b, c) vfs_unlink(DHD_VFS_INODE(dir), b, c)
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0) */
+#if ((defined DHD_DUMP_MNGR) || (defined DNGL_AXI_ERROR_LOGGING))
 int
 dhd_file_delete(char *path)
 {
@@ -21493,6 +21494,7 @@ dhd_file_delete(char *path)
 
 	return err;
 }
+#endif
 #ifdef DHD_DUMP_MNGR
 static int
 dhd_dump_file_manage_idx(dhd_dump_file_manage_t *fm_ptr, char *fname)
