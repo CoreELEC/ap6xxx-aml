@@ -13849,6 +13849,8 @@ dhd_dev_get_feature_set(struct net_device *dev)
 	feature_set |= WIFI_FEATURE_LINKSTAT;
 #endif /* LINKSTAT_SUPPORT */
 
+	feature_set |= WIFI_FEATURE_SET_LATENCY_MODE;
+
 #if defined(PNO_SUPPORT) && !defined(DISABLE_ANDROID_PNO)
 	if (dhd_is_pno_supported(dhd)) {
 		feature_set |= WIFI_FEATURE_PNO;

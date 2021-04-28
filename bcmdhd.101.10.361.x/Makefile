@@ -251,11 +251,8 @@ modules_install:
 	mkdir -p ${OUT_DIR}/../vendor_lib/modules
 	cd ${OUT_DIR}/$(M)/; find -name "*.ko" -exec cp {} ${OUT_DIR}/../vendor_lib/modules/ \;
 
-clean:
-	$(MAKE) -C $(KERNEL_SRC) M=$(M) clean $(KBUILD_OPTIONS)
-
 bcmdhd_sdio:
-	$(MAKE) -C $(KERNEL_SRC) M=$(M) CONFIG_DHD_USE_STATIC_BUF=y CONFIG_BCMDHD_SDIO=y modules
+	$(MAKE) -C $(KERNEL_SRC) M=$(M) CONFIG_DHD_USE_STATIC_BUF=y modules
 	#mv dhd.ko dhd_sdio.ko
 
 bcmdhd_usb:

@@ -2756,7 +2756,7 @@ _dhd_set_mac_address(dhd_info_t *dhd, int ifidx, uint8 *addr, bool skip_stop)
 
 #ifdef DHD_NOTIFY_MAC_CHANGED
 	if (skip_stop) {
-		dev_open(dhd->iflist[ifidx]->net);
+		dev_open(dhd->iflist[ifidx]->net, NULL);
 		dhd->pub.skip_dhd_stop = FALSE;
 		WL_MSG(dhd_ifname(&dhd->pub, ifidx), "notify mac changed done\n");
 	}
@@ -3245,7 +3245,7 @@ dhd_set_mac_address(struct net_device *dev, void *addr)
 			 */
 			(void)memcpy_s(dev->dev_addr, ETH_ALEN, dhdif->mac_addr, ETH_ALEN);
 #ifdef DHD_NOTIFY_MAC_CHANGED
-			dev_open(dev);
+			dev_open(dev, NULL);
 #endif /* DHD_NOTIFY_MAC_CHANGED */
 			return ret;
 		}
@@ -24381,6 +24381,7 @@ dhd_ring_whole_unlock(void *_ring)
 #else
 #define DHD_VFS_UNLINK(dir, b, c) vfs_unlink(DHD_VFS_INODE(dir), b, c)
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0) */
+#if ((defined DHD_DUMP_MNGR) || (defined DNGL_AXI_ERROR_LOGGING))
 int
 dhd_file_delete(char *path)
 {
@@ -24423,6 +24424,7 @@ dhd_file_delete(char *path)
 
 	return err;
 }
+#endif
 #ifdef DHD_DUMP_MNGR
 static int
 dhd_dump_file_manage_idx(dhd_dump_file_manage_t *fm_ptr, char *fname)
