@@ -296,6 +296,11 @@ bool ap_cfg_running = FALSE;
 bool ap_fw_loaded = FALSE;
 #endif /* defined(OEM_ANDROID) && defined(SOFTAP) */
 
+#ifdef WLEASYMESH
+extern int dhd_set_1905_almac(dhd_pub_t *dhdp, uint8 ifidx, uint8* ea, bool mcast);
+extern int dhd_get_1905_almac(dhd_pub_t *dhdp, uint8 ifidx, uint8* ea, bool mcast);
+#endif /* WLEASYMESH */
+
 #define CHIPID_MISMATCH	8
 
 #define DHD_VERSION "Dongle Host Driver, version " EPI_VERSION_STR
@@ -481,6 +486,10 @@ enum {
 #if defined(DHD_AWDL)
 	IOV_AWDL_LLC_ENABLE,
 #endif
+#ifdef WLEASYMESH
+	IOV_1905_AL_UCAST,
+	IOV_1905_AL_MCAST,
+#endif /* WLEASYMESH */
 	IOV_LAST
 };
 
@@ -665,6 +674,10 @@ const bcm_iovar_t dhd_iovars[] = {
 	{"awdl_llc_enable", IOV_AWDL_LLC_ENABLE, 0, 0, IOVT_BOOL, 0},
 #endif
 	/* --- add new iovars *ABOVE* this line --- */
+#ifdef WLEASYMESH
+	{"1905_al_ucast", IOV_1905_AL_UCAST, 0, 0, IOVT_BUFFER, ETHER_ADDR_LEN},
+	{"1905_al_mcast", IOV_1905_AL_MCAST, 0, 0, IOVT_BUFFER, ETHER_ADDR_LEN},
+#endif /* WLEASYMESH */
 	{NULL, 0, 0, 0, 0, 0 }
 };
 
@@ -2518,23 +2531,8 @@ dhd_doiovar(dhd_pub_t *dhd_pub, const bcm_iovar_t *vi, uint32 actionid, const ch
 
 #ifndef BCMDBUS
 	case IOV_GVAL(IOV_WDTICK):
-#ifdef HOST_TPUT_TEST
-		if (dhd_pub->net_ts.tv_sec == 0 && dhd_pub->net_ts.tv_nsec == 0) {
-			osl_do_gettimeofday(&dhd_pub->net_ts);
-		} else {
-			struct osl_timespec cur_ts;
-			uint32 diff_ms;
-			osl_do_gettimeofday(&cur_ts);
-			diff_ms = osl_do_gettimediff(&cur_ts, &dhd_pub->net_ts)/1000;
-			int_val = (int32)((dhd_pub->net_len/1024/1024)*8)*1000/diff_ms;
-			dhd_pub->net_len = 0;
-			memcpy(&dhd_pub->net_ts, &cur_ts, sizeof(struct osl_timespec));
-			bcopy(&int_val, arg, sizeof(int_val));
-		}
-#else
 		int_val = (int32)dhd_watchdog_ms;
 		bcopy(&int_val, arg, val_size);
-#endif
 		break;
 #endif /* !BCMDBUS */
 
@@ -2632,23 +2630,8 @@ dhd_doiovar(dhd_pub_t *dhd_pub, const bcm_iovar_t *vi, uint32 actionid, const ch
 #endif /* BCMPERFSTATS */
 
 	case IOV_GVAL(IOV_IOCTLTIMEOUT): {
-#ifdef HOST_TPUT_TEST
-		if (dhd_pub->bus_ts.tv_sec == 0 && dhd_pub->bus_ts.tv_nsec == 0) {
-			osl_do_gettimeofday(&dhd_pub->bus_ts);
-		} else {
-			struct osl_timespec cur_ts;
-			uint32 diff_ms;
-			osl_do_gettimeofday(&cur_ts);
-			diff_ms = osl_do_gettimediff(&cur_ts, &dhd_pub->bus_ts)/1000;
-			int_val = (int32)((dhd_pub->dstats.tx_bytes/1024/1024)*8)*1000/diff_ms;
-			dhd_pub->dstats.tx_bytes = 0;
-			memcpy(&dhd_pub->bus_ts, &cur_ts, sizeof(struct osl_timespec));
-			bcopy(&int_val, arg, sizeof(int_val));
-		}
-#else
 		int_val = (int32)dhd_os_get_ioctl_resp_timeout();
 		bcopy(&int_val, arg, sizeof(int_val));
-#endif
 		break;
 	}
 
@@ -3801,6 +3784,60 @@ dhd_doiovar(dhd_pub_t *dhd_pub, const bcm_iovar_t *vi, uint32 actionid, const ch
 		(void)memcpy_s(arg, val_size, &int_val, sizeof(int_val));
 		break;
 #endif
+#ifdef WLEASYMESH
+	case IOV_SVAL(IOV_1905_AL_UCAST): {
+		uint32  bssidx;
+		const char *val;
+		uint8 ea[6] = {0};
+		if (dhd_iovar_parse_bssidx(dhd_pub, (char *)name, &bssidx, &val) != BCME_OK) {
+			DHD_ERROR(("%s: 1905_al_ucast: bad parameter\n", __FUNCTION__));
+			bcmerror = BCME_BADARG;
+			break;
+		}
+		bcopy(val, ea, ETHER_ADDR_LEN);
+		printf("IOV_1905_AL_UCAST:" MACDBG "\n", MAC2STRDBG(ea));
+		bcmerror = dhd_set_1905_almac(dhd_pub, bssidx, ea, FALSE);
+		break;
+	}
+	case IOV_GVAL(IOV_1905_AL_UCAST): {
+		uint32  bssidx;
+		const char *val;
+		if (dhd_iovar_parse_bssidx(dhd_pub, (char *)name, &bssidx, &val) != BCME_OK) {
+			DHD_ERROR(("%s: 1905_al_ucast: bad parameter\n", __FUNCTION__));
+			bcmerror = BCME_BADARG;
+			break;
+		}
+
+		bcmerror = dhd_get_1905_almac(dhd_pub, bssidx, arg, FALSE);
+		break;
+	}
+	case IOV_SVAL(IOV_1905_AL_MCAST): {
+		uint32  bssidx;
+		const char *val;
+		uint8 ea[6] = {0};
+		if (dhd_iovar_parse_bssidx(dhd_pub, (char *)name, &bssidx, &val) != BCME_OK) {
+			DHD_ERROR(("%s: 1905_al_mcast: bad parameter\n", __FUNCTION__));
+			bcmerror = BCME_BADARG;
+			break;
+		}
+		bcopy(val, ea, ETHER_ADDR_LEN);
+		printf("IOV_1905_AL_MCAST:" MACDBG "\n", MAC2STRDBG(ea));
+		bcmerror = dhd_set_1905_almac(dhd_pub, bssidx, ea, TRUE);
+		break;
+	}
+	case IOV_GVAL(IOV_1905_AL_MCAST): {
+		uint32  bssidx;
+		const char *val;
+		if (dhd_iovar_parse_bssidx(dhd_pub, (char *)name, &bssidx, &val) != BCME_OK) {
+			DHD_ERROR(("%s: 1905_al_mcast: bad parameter\n", __FUNCTION__));
+			bcmerror = BCME_BADARG;
+			break;
+		}
+
+		bcmerror = dhd_get_1905_almac(dhd_pub, bssidx, arg, TRUE);
+		break;
+	}
+#endif /* WLEASYMESH */
 
 	default:
 		bcmerror = BCME_UNSUPPORTED;

@@ -56,25 +56,25 @@ uint iw_msg_level = WL_ERROR_LEVEL;
 #define WL_ERROR_MSG(x, args...) \
 	do { \
 		if (iw_msg_level & WL_ERROR_LEVEL) { \
-			printk(KERN_ERR "[dhd] WEXT-ERROR) %s : " x, __func__, ## args); \
+			printk(KERN_ERR DHD_LOG_PREFIXS "WEXT-ERROR) %s : " x, __func__, ## args); \
 		} \
 	} while (0)
 #define WL_TRACE_MSG(x, args...) \
 	do { \
 		if (iw_msg_level & WL_TRACE_LEVEL) { \
-			printk(KERN_INFO "[dhd] WEXT-TRACE) %s : " x, __func__, ## args); \
+			printk(KERN_INFO DHD_LOG_PREFIXS "WEXT-TRACE) %s : " x, __func__, ## args); \
 		} \
 	} while (0)
 #define WL_SCAN_MSG(x, args...) \
 	do { \
 		if (iw_msg_level & WL_SCAN_LEVEL) { \
-			printk(KERN_INFO "[dhd] WEXT-SCAN) %s : " x, __func__, ## args); \
+			printk(KERN_INFO DHD_LOG_PREFIXS "WEXT-SCAN) %s : " x, __func__, ## args); \
 		} \
 	} while (0)
 #define WL_WSEC_MSG(x, args...) \
 	do { \
 		if (iw_msg_level & WL_WSEC_LEVEL) { \
-			printk(KERN_INFO "[dhd] WEXT-WSEC) %s : " x, __func__, ## args); \
+			printk(KERN_INFO DHD_LOG_PREFIXS "WEXT-WSEC) %s : " x, __func__, ## args); \
 		} \
 	} while (0)
 #define WL_ERROR(x) WL_ERROR_MSG x
@@ -281,32 +281,22 @@ dev_wlc_ioctl(
 	int len
 )
 {
-	struct ifreq ifr;
-	wl_ioctl_t ioc;
-	mm_segment_t fs;
+	struct dhd_pub *dhd = dhd_get_pub(dev);
+	dhd_ioctl_t ioc;
+	int8 index;
 	int ret;
 
 	memset(&ioc, 0, sizeof(ioc));
-#ifdef CONFIG_COMPAT
-	ioc.cmd = cmd | WLC_SPEC_FLAG;
-#else
 	ioc.cmd = cmd;
-#endif
 	ioc.buf = arg;
 	ioc.len = len;
 
-	strncpy(ifr.ifr_name, dev->name, sizeof(ifr.ifr_name));
-	ifr.ifr_name[sizeof(ifr.ifr_name) - 1] = '\0';
-	ifr.ifr_data = (caddr_t) &ioc;
-
-	fs = get_fs();
-	set_fs(get_ds());
-#if defined(WL_USE_NETDEV_OPS)
-	ret = dev->netdev_ops->ndo_do_ioctl(dev, &ifr, SIOCDEVPRIVATE);
-#else
-	ret = dev->do_ioctl(dev, &ifr, SIOCDEVPRIVATE);
-#endif
-	set_fs(fs);
+	index = dhd_net2idx(dhd->info, dev);
+	if (index == DHD_BAD_IF) {
+		WL_ERROR(("Bad ifidx from dev:%p\n", dev));
+		return -ENODEV;
+	}
+	ret = dhd_ioctl_process(dhd, index, &ioc, arg);
 
 	return ret;
 }
@@ -618,7 +608,7 @@ done:
 
 #define DHD_CHECK(dhd, dev) \
  	if (!dhd) { \
-		WL_ERROR (("[dhd-%s] %s: dhd is NULL\n", dev->name, __FUNCTION__)); \
+		WL_ERROR (("[%s] dhd is NULL\n", dev->name)); \
 		return -ENODEV; \
 	} \
 
@@ -3423,9 +3413,9 @@ wl_iw_ioctl(
 #if WIRELESS_EXT > 13
 	case SIOCGIWSCAN:
 #ifndef WL_ESCAN
-	if (iscan)
-		max_tokens = wrq->u.data.length;
-	else
+		if (iscan)
+			max_tokens = wrq->u.data.length;
+		else
 #endif
 		max_tokens = IW_SCAN_MAX_DATA;
 		break;
@@ -3772,7 +3762,7 @@ wl_iw_event(struct net_device *dev, struct wl_wext_info *wext_info,
 }
 
 #ifdef WL_NAN
-static int wl_iw_get_wireless_stats_cbfn(void *ctx, uint8 *data, uint16 type, uint16 len)
+static int wl_iw_get_wireless_stats_cbfn(void *ctx, const uint8 *data, uint16 type, uint16 len)
 {
 	struct iw_statistics *wstats = ctx;
 	int res = BCME_OK;

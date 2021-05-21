@@ -140,13 +140,13 @@ enum wl_cfgp2p_status {
  * but it can be regarded as real error case for Tester
  */
 #ifdef CUSTOMER_HW4_DEBUG
-#define CFGP2P_ERROR_TEXT		"[dhd] CFGP2P-INFO2) "
+#define CFGP2P_ERROR_TEXT		DHD_LOG_PREFIXS "CFGP2P-INFO2) "
 #else
-#define CFGP2P_ERROR_TEXT		"[dhd] CFGP2P-ERROR) "
+#define CFGP2P_ERROR_TEXT		DHD_LOG_PREFIXS "CFGP2P-ERROR) "
 #endif /* CUSTOMER_HW4_DEBUG */
-#define CFGP2P_INFO_TEXT		"[dhd] CFGP2P-INFO) "
-#define CFGP2P_ACTION_TEXT		"[dhd] CFGP2P-ACTION) "
-#define CFGP2P_DEBUG_TEXT		"[dhd] CFGP2P-DEBUG) "
+#define CFGP2P_INFO_TEXT		DHD_LOG_PREFIXS "CFGP2P-INFO) "
+#define CFGP2P_ACTION_TEXT		DHD_LOG_PREFIXS "CFGP2P-ACTION) "
+#define CFGP2P_DEBUG_TEXT		DHD_LOG_PREFIXS "CFGP2P-DEBUG) "
 #endif /* defined(CUSTOMER_DBG_PREFIX_ENABLE) */
 
 #ifdef DHD_LOG_DUMP

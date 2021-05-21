@@ -2703,7 +2703,7 @@ wl_cfg80211_parse_ies(const u8 *ptr, u32 len, struct parsed_ies *ies)
 		WL_DBG(("WPSIE in beacon \n"));
 		ies->wps_ie_len = ies->wps_ie->length + WPA_RSN_IE_TAG_FIXED_LEN;
 	} else {
-		WL_ERR(("No WPSIE in beacon \n"));
+		WL_DBG(("No WPSIE in beacon \n"));
 	}
 
 	/* find the RSN_IE */
@@ -2742,6 +2742,9 @@ wl_cfg80211_set_ap_role(
 	s32 bssidx;
 	s32 apsta = 0;
 	bool new_chip;
+#ifdef WLEASYMESH
+	dhd_pub_t *dhd = (dhd_pub_t *)(cfg->pub);
+#endif /* WLEASYMESH */
 
 	new_chip = wl_new_chip_check(dev);
 
@@ -2772,6 +2775,28 @@ wl_cfg80211_set_ap_role(
 		WL_ERR(("Getting AP mode failed %d \n", err));
 		return err;
 	}
+#ifdef WLEASYMESH
+	else if (dhd->conf->fw_type == FW_TYPE_EZMESH) {
+		WL_MSG(dev->name, "Getting AP mode ok, set map and dwds");
+		err = wldev_ioctl_set(dev, WLC_DOWN, &ap, sizeof(s32));
+		if (err < 0) {
+			WL_ERR(("WLC_DOWN error %d\n", err));
+			return err;
+		}
+		//For FrontHaulAP
+		err = wldev_iovar_setint(dev, "map", 2);
+		if (err < 0) {
+			WL_ERR(("wl map 2 error %d\n", err));
+			return err;
+		}
+		err = wldev_iovar_setint(dev, "dwds", 1);
+		if (err < 0) {
+			WL_ERR(("wl dwds 1 error %d\n", err));
+			return err;
+		}
+		WL_MSG(dev->name, "Get AP %d", (int)ap);
+	}
+#endif /* WLEASYMESH*/
 
 	if (!ap) {
 		/* AP mode switch not supported. Try setting up AP explicitly */
@@ -2785,15 +2810,28 @@ wl_cfg80211_set_ap_role(
 
 			/* Check for any connected interfaces before wl down */
 			if (wl_get_drv_status_all(cfg, CONNECTED) > 0) {
-				WL_ERR(("Concurrent i/f operational. can't do wl down"));
-				return BCME_ERROR;
+#ifdef WLEASYMESH
+				if (dhd->conf->fw_type == FW_TYPE_EZMESH) {
+					WL_MSG(dev->name, "do wl down");
+				} else {
+#endif /* WLEASYMESH */
+					WL_ERR(("Concurrent i/f operational. can't do wl down"));
+					return BCME_ERROR;
+#ifdef WLEASYMESH
+				}
+#endif /* WLEASYMESH */
 			}
 			err = wldev_ioctl_set(dev, WLC_DOWN, &ap, sizeof(s32));
 			if (err < 0) {
 				WL_ERR(("WLC_DOWN error %d\n", err));
 				return err;
 			}
-			err = wldev_iovar_setint(dev, "apsta", 0);
+#ifdef WLEASYMESH
+			if (dhd->conf->fw_type == FW_TYPE_EZMESH)
+				err = wldev_iovar_setint(dev, "apsta", 1);
+			else
+#endif /* WLEASYMESH */
+				err = wldev_iovar_setint(dev, "apsta", 0);
 			if (err < 0) {
 				WL_ERR(("wl apsta 0 error %d\n", err));
 				return err;
@@ -2804,6 +2842,22 @@ wl_cfg80211_set_ap_role(
 				WL_ERR(("setting AP mode failed %d \n", err));
 				return err;
 			}
+#ifdef WLEASYMESH
+			//For FrontHaulAP
+			if (dhd->conf->fw_type == FW_TYPE_EZMESH) {
+				WL_MSG(dev->name, "wl map 2");
+				err = wldev_iovar_setint(dev, "map", 2);
+				if (err < 0) {
+					WL_ERR(("wl map 2 error %d\n", err));
+					return err;
+				}
+				err = wldev_iovar_setint(dev, "dwds", 1);
+				if (err < 0) {
+					WL_ERR(("wl dwds 1 error %d\n", err));
+					return err;
+				}
+			}
+#endif /* WLEASYMESH */
 		}
 	}
 	else if (bssidx == 0 && !new_chip && !wl_ext_iapsta_other_if_enabled(dev)) {
@@ -2933,7 +2987,7 @@ wl_cfg80211_bcn_bringup_ap(
 	}
 
 	if (dev_role == NL80211_IFTYPE_P2P_GO) {
-		wl_ext_get_sec(dev, 0, sec, sizeof(sec));
+		wl_ext_get_sec(dev, 0, sec, sizeof(sec), TRUE);
 		WL_MSG(dev->name, "Creating GO with sec=%s\n", sec);
 		is_bssup = wl_cfg80211_bss_isup(dev, bssidx);
 		if (!is_bssup && (ies->wpa2_ie != NULL)) {
@@ -3091,7 +3145,7 @@ wl_cfg80211_bcn_bringup_ap(
 			join_params.ssid.SSID_len);
 		join_params.ssid.SSID_len = htod32(join_params.ssid.SSID_len);
 
-		wl_ext_get_sec(dev, 0, sec, sizeof(sec));
+		wl_ext_get_sec(dev, 0, sec, sizeof(sec), TRUE);
 		WL_MSG(dev->name, "Creating AP with sec=%s\n", sec);
 		/* create softap */
 		if ((err = wldev_ioctl_set(dev, WLC_SET_SSID, &join_params,
@@ -3577,6 +3631,11 @@ wl_cfg80211_start_ap(
  *      hardcoded values in 'wl_cfg80211_set_channel()'.
  */
 #if ((LINUX_VERSION_CODE >= KERNEL_VERSION(3, 6, 0)) && !defined(WL_COMPAT_WIRELESS))
+	if (!dev->ieee80211_ptr->preset_chandef.chan) {
+		WL_ERR(("chan is NULL\n"));
+		err = -EINVAL;
+		goto fail;
+	}
 	if ((err = wl_cfg80211_set_channel(wiphy, dev,
 		dev->ieee80211_ptr->preset_chandef.chan,
 		NL80211_CHAN_HT20) < 0)) {

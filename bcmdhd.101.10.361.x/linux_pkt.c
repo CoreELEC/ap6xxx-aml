@@ -379,7 +379,7 @@ BCMFASTPATH(linux_pktfree)(osl_t *osh, void *p, bool send)
 		bcm_object_trace_opr(skb, BCM_OBJDBG_REMOVE, caller, line);
 #endif /* BCM_OBJECT_TRACE */
 
-		if (skb->destructor) {
+		if (skb->destructor || irqs_disabled()) {
 			/* cannot kfree_skb() on hard IRQ (net/core/skbuff.c) if
 			 * destructor exists
 			 */

@@ -46,11 +46,6 @@
 #if defined(CONFIG_HAS_EARLYSUSPEND) && defined(DHD_USE_EARLYSUSPEND)
 #include <linux/earlysuspend.h>
 #endif /* defined(CONFIG_HAS_EARLYSUSPEND) && defined(DHD_USE_EARLYSUSPEND) */
-#if defined(CONFIG_WIFI_CONTROL_FUNC) || defined(CUSTOMER_HW4)
-#include <linux/wlan_plat.h>
-#else
-#include <dhd_plat.h>
-#endif /* CONFIG_WIFI_CONTROL_FUNC */
 
 #ifdef BCMPCIE
 #include <bcmmsgbuf.h>
@@ -102,7 +97,6 @@ typedef struct wifi_adapter_info {
 #if defined (BT_OVER_SDIO)
 	const char	*btfw_path;
 #endif /* defined (BT_OVER_SDIO) */
-#ifdef BUS_POWER_RESTORE
 #if defined(BCMSDIO)
 	struct sdio_func *sdio_func;
 #endif /* BCMSDIO */
@@ -110,8 +104,13 @@ typedef struct wifi_adapter_info {
 	struct pci_dev *pci_dev;
 	struct pci_saved_state *pci_saved_state;
 #endif /* BCMPCIE */
-#endif
 } wifi_adapter_info_t;
+
+#if defined(CONFIG_WIFI_CONTROL_FUNC) || defined(CUSTOMER_HW4)
+#include <linux/wlan_plat.h>
+#else
+#include <dhd_plat.h>
+#endif /* CONFIG_WIFI_CONTROL_FUNC */
 
 typedef struct bcmdhd_wifi_platdata {
 	uint				num_adapters;
@@ -403,6 +402,10 @@ typedef struct dhd_if {
 	bool recv_reassoc_evt;
 	bool post_roam_evt;
 #endif /* DHD_POST_EAPOL_M1_AFTER_ROAM_EVT */
+#ifdef WLEASYMESH
+	uint8 _1905_al_ucast[ETHER_ADDR_LEN];
+	uint8 _1905_al_mcast[ETHER_ADDR_LEN];
+#endif /* WLEASYMESH */
 } dhd_if_t;
 
 struct ipv6_work_info_t {

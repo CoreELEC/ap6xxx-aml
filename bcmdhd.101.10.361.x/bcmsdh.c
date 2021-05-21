@@ -939,7 +939,7 @@ bcmsdh_set_mode(void *sdh, uint mode)
 
 #ifdef PKT_STATICS
 uint32
-bcmsdh_get_spend_time(void *sdh) 
+bcmsdh_get_spend_time(void *sdh)
 {
 	bcmsdh_info_t *bcmsdh = (bcmsdh_info_t *)sdh;
 	return (sdioh_get_spend_time(bcmsdh->sdioh));

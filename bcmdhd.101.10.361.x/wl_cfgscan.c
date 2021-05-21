@@ -402,12 +402,13 @@ s32 wl_inform_single_bss(struct bcm_cfg80211 *cfg, wl_bss_info_t *bi, bool updat
 	channel = ieee80211_get_channel(wiphy, freq);
 	memcpy(tmp_buf, bi->SSID, bi->SSID_len);
 	tmp_buf[bi->SSID_len] = '\0';
-	WL_SCAN(("BSSID %pM, channel %3d(%3d %sMHz), rssi %3d, capa 0x%-4x, mgmt_type %d, "
+	WL_SCAN(("BSSID %pM, channel %3d(%3d %3sMHz), rssi %3d, capa 0x%-4x, mgmt_type %d, "
 		"frame_len %3d, SSID \"%s\"\n",
 		&bi->BSSID, notif_bss_info->channel, CHSPEC_CHANNEL(chanspec),
 		CHSPEC_IS20(chanspec)?"20":
 		CHSPEC_IS40(chanspec)?"40":
-		CHSPEC_IS80(chanspec)?"80":"160",
+		CHSPEC_IS80(chanspec)?"80":
+		CHSPEC_IS160(chanspec)?"160":"??",
 		notif_bss_info->rssi, mgmt->u.beacon.capab_info, mgmt_type,
 		notif_bss_info->frame_len, tmp_buf));
 	if (unlikely(!channel)) {

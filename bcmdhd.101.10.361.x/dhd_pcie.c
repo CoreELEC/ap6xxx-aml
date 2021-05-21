@@ -982,7 +982,7 @@ dhdpcie_chip_support_msi(dhd_bus_t *bus)
  * 'tcm' is the *host* virtual address at which tcm is mapped.
  */
 int dhdpcie_bus_attach(osl_t *osh, dhd_bus_t **bus_ptr,
-	volatile char *regs, volatile char *tcm, void *pci_dev)
+	volatile char *regs, volatile char *tcm, void *pci_dev, wifi_adapter_info_t *adapter)
 {
 	dhd_bus_t *bus = NULL;
 	int ret = BCME_OK;
@@ -995,6 +995,9 @@ int dhdpcie_bus_attach(osl_t *osh, dhd_bus_t **bus_ptr,
 			ret = BCME_NORESOURCE;
 			break;
 		}
+		bus->bus = adapter->bus_type;
+		bus->bus_num = adapter->bus_num;
+		bus->slot_num = adapter->slot_num;
 
 		bus->regs = regs;
 		bus->tcm = tcm;
@@ -1039,6 +1042,9 @@ int dhdpcie_bus_attach(osl_t *osh, dhd_bus_t **bus_ptr,
 			ret = BCME_NORESOURCE;
 			break;
 		}
+#if defined(GET_OTP_MAC_ENABLE) || defined(GET_OTP_MODULE_NAME)
+		dhd_conf_get_otp(bus->dhd, bus->sih);
+#endif
 		DHD_ERROR(("%s: making DHD_BUS_DOWN\n", __FUNCTION__));
 		bus->dhd->busstate = DHD_BUS_DOWN;
 		bus->dhd->hostrdy_after_init = TRUE;
@@ -1068,6 +1074,8 @@ int dhdpcie_bus_attach(osl_t *osh, dhd_bus_t **bus_ptr,
 #ifdef DHD_MSI_SUPPORT
 		bus->d2h_intr_method = enable_msi && dhdpcie_chip_support_msi(bus) ?
 			PCIE_MSI : PCIE_INTX;
+		if (bus->dhd->conf->d2h_intr_method >= 0)
+			bus->d2h_intr_method = bus->dhd->conf->d2h_intr_method;
 #else
 		bus->d2h_intr_method = PCIE_INTX;
 #endif /* DHD_MSI_SUPPORT */
@@ -1168,6 +1176,14 @@ uint dhd_bus_chippkg_id(dhd_pub_t *dhdp)
 {
 	dhd_bus_t *bus = dhdp->bus;
 	return bus->sih->chippkg;
+}
+
+int dhd_bus_get_ids(struct dhd_bus *bus, uint32 *bus_type, uint32 *bus_num, uint32 *slot_num)
+{
+	*bus_type = bus->bus;
+	*bus_num = bus->bus_num;
+	*slot_num = bus->slot_num;
+	return 0;
 }
 
 /** Conduct Loopback test */
@@ -1423,7 +1439,7 @@ dhdpcie_bus_isr(dhd_bus_t *bus)
 	uint32 intstatus = 0;
 
 	do {
-		DHD_TRACE(("%s: Enter\n", __FUNCTION__));
+		DHD_INTR(("%s: Enter\n", __FUNCTION__));
 		/* verify argument */
 		if (!bus) {
 			DHD_LOG_MEM(("%s : bus is null pointer, exit \n", __FUNCTION__));
@@ -1484,7 +1500,8 @@ dhdpcie_bus_isr(dhd_bus_t *bus)
 			}
 		}
 
-		if (bus->d2h_intr_method == PCIE_MSI) {
+		if (bus->d2h_intr_method == PCIE_MSI &&
+				!dhd_conf_legacy_msi_chip(bus->dhd)) {
 			/* For MSI, as intstatus is cleared by firmware, no need to read */
 			goto skip_intstatus_read;
 		}
@@ -1528,17 +1545,16 @@ skip_intstatus_read:
 
 		bus->isr_intr_disable_count++;
 
-#ifdef NDIS
-		/* TODO: for NDIS also we need to use disable_irq in future */
+#ifdef CHIP_INTR_CONTROL
 		dhdpcie_bus_intr_disable(bus); /* Disable interrupt using IntMask!! */
-#else /* !NDIS */
+#else
 		/* For Linux, Macos etc (otherthan NDIS) instead of disabling
 		* dongle interrupt by clearing the IntMask, disable directly
 		* interrupt from the host side, so that host will not recieve
 		* any interrupts at all, even though dongle raises interrupts
 		*/
 		dhdpcie_disable_irq_nosync(bus); /* Disable interrupt!! */
-#endif /* !NDIS */
+#endif /* HOST_INTR_CONTROL */
 
 		bus->intdis = TRUE;
 #ifdef DHD_FLOW_RING_STATUS_TRACE
@@ -1561,12 +1577,12 @@ skip_intstatus_read:
 #endif /* !NDIS */
 #endif /* defined(SDIO_ISR_THREAD) */
 
-		DHD_TRACE(("%s: Exit Success DPC Queued\n", __FUNCTION__));
+		DHD_INTR(("%s: Exit Success DPC Queued\n", __FUNCTION__));
 		return TRUE;
 
 	} while (0);
 
-	DHD_TRACE(("%s: Exit Failure\n", __FUNCTION__));
+	DHD_INTR(("%s: Exit Failure\n", __FUNCTION__));
 	return FALSE;
 }
 
@@ -3976,7 +3992,9 @@ dhdpcie_download_code_file(struct dhd_bus *bus, char *pfw_path)
 	bool store_reset;
 	char *imgbuf = NULL; /**< XXX a file pointer, contradicting its name and type */
 	uint8 *memblock = NULL, *memptr = NULL;
+#ifdef CHECK_DOWNLOAD_FW
 	uint8 *memptr_tmp = NULL; // terence: check downloaded firmware is correct
+#endif
 	int offset_end = bus->ramsize;
 	uint32 file_size = 0, read_len = 0;
 
@@ -4047,13 +4065,15 @@ dhdpcie_download_code_file(struct dhd_bus *bus, char *pfw_path)
 		bcmerror = BCME_NOMEM;
 		goto err;
 	}
-	if (dhd_msg_level & DHD_TRACE_VAL) {
+#ifdef CHECK_DOWNLOAD_FW
+	if (bus->dhd->conf->fwchk) {
 		memptr_tmp = MALLOC(bus->dhd->osh, MEMBLOCK + DHD_SDALIGN);
 		if (memptr_tmp == NULL) {
 			DHD_ERROR(("%s: Failed to allocate memory %d bytes\n", __FUNCTION__, MEMBLOCK));
 			goto err;
 		}
 	}
+#endif
 	if ((uint32)(uintptr)memblock % DHD_SDALIGN) {
 		memptr += (DHD_SDALIGN - ((uint32)(uintptr)memblock % DHD_SDALIGN));
 	}
@@ -4113,7 +4133,8 @@ dhdpcie_download_code_file(struct dhd_bus *bus, char *pfw_path)
 			goto err;
 		}
 
-		if (dhd_msg_level & DHD_TRACE_VAL) {
+#ifdef CHECK_DOWNLOAD_FW
+		if (bus->dhd->conf->fwchk) {
 			bcmerror = dhdpcie_bus_membytes(bus, FALSE, offset, memptr_tmp, len);
 			if (bcmerror) {
 				DHD_ERROR(("%s: error %d on reading %d membytes at 0x%08x\n",
@@ -4126,6 +4147,7 @@ dhdpcie_download_code_file(struct dhd_bus *bus, char *pfw_path)
 			} else
 				DHD_INFO(("%s: Download, Upload and compare succeeded.\n", __FUNCTION__));
 		}
+#endif
 		offset += MEMBLOCK;
 
 		if (offset >= offset_end) {
@@ -4142,10 +4164,10 @@ dhdpcie_download_code_file(struct dhd_bus *bus, char *pfw_path)
 err:
 	if (memblock) {
 		MFREE(bus->dhd->osh, memblock, MEMBLOCK + DHD_SDALIGN);
-		if (dhd_msg_level & DHD_TRACE_VAL) {
-			if (memptr_tmp)
-				MFREE(bus->dhd->osh, memptr_tmp, MEMBLOCK + DHD_SDALIGN);
-		}
+#ifdef CHECK_DOWNLOAD_FW
+		if (memptr_tmp)
+			MFREE(bus->dhd->osh, memptr_tmp, MEMBLOCK + DHD_SDALIGN);
+#endif
 	}
 
 	if (imgbuf) {
@@ -12456,11 +12478,10 @@ BCMFASTPATH(dhd_bus_dpc)(struct dhd_bus *bus)
 #ifdef DHD_READ_INTSTATUS_IN_DPC
 INTR_ON:
 #endif /* DHD_READ_INTSTATUS_IN_DPC */
-#ifdef NDIS
-		/* TODO: for NDIS also we need to use enable_irq in future */
+#ifdef CHIP_INTR_CONTROL
 		dhdpcie_bus_intr_enable(bus); /* Enable back interrupt using Intmask!! */
 		bus->dpc_intr_enable_count++;
-#else /* !NDIS */
+#else
 		/* For Linux, Macos etc (otherthan NDIS) enable back the host interrupts
 		 * which has been disabled in the dhdpcie_bus_isr()
 		 */
@@ -12468,7 +12489,7 @@ INTR_ON:
 			dhdpcie_enable_irq(bus); /* Enable back interrupt!! */
 			bus->dpc_intr_enable_count++;
 		}
-#endif /* !NDIS */
+#endif /* HOST_INTR_CONTROL */
 		bus->dpc_exit_time = OSL_LOCALTIME_NS();
 	} else {
 		bus->resched_dpc_time = OSL_LOCALTIME_NS();
@@ -14355,7 +14376,7 @@ void dhd_bus_clean_flow_ring(dhd_bus_t *bus, void *node)
 	ASSERT(DHD_FLOW_QUEUE_EMPTY(queue));
 
 	/* Reinitialise flowring's queue */
-	dhd_flow_queue_reinit(bus->dhd, queue, FLOW_RING_QUEUE_THRESHOLD);
+	dhd_flow_queue_reinit(bus->dhd, queue, bus->dhd->conf->flow_ring_queue_threshold);
 	flow_ring_node->status = FLOW_RING_STATUS_CLOSED;
 	flow_ring_node->active = FALSE;
 

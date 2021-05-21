@@ -162,10 +162,11 @@ void dhd_select_cpu_candidacy(dhd_info_t *dhd)
 	/* Does not use promary cpus if DHD received affinity off cmd
 	*  from framework
 	*/
-	if (primary_available_cpus > 0 && dhd->permitted_primary_cpu) {
+	if (primary_available_cpus > 0 && dhd->permitted_primary_cpu)
 #else
-	if (primary_available_cpus > 0) {
+	if (primary_available_cpus > 0)
 #endif /* DHD_LB_HOST_CTRL */
+	{
 		napi_cpu = cpumask_first(dhd->cpumask_primary_new);
 
 		/* If no further CPU is available,

@@ -200,12 +200,12 @@ static const char tx_pktfate[][30] = {
 	do { \
 		if (dump_msg_level & DUMP_EAPOL_VAL) { \
 			if (tx) { \
-				DHD_PKTDUMP(("[dhd-%s] 802_1X " x " [TX] : (%s) %s (%s)"TXFATE_FMT"\n", \
+				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] 802_1X " x " [TX] : (%s) %s (%s)"TXFATE_FMT"\n", \
 					ifname, ## args, \
 					tx?seabuf:deabuf, tx?"->":"<-", tx?deabuf:seabuf, \
 					TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} else { \
-				DHD_PKTDUMP(("[dhd-%s] 802_1X " x " [RX] : (%s) %s (%s)\n", \
+				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] 802_1X " x " [RX] : (%s) %s (%s)\n", \
 					ifname, ## args, \
 					tx?seabuf:deabuf, tx?"->":"<-", tx?deabuf:seabuf)); \
 			} \
@@ -216,12 +216,12 @@ static const char tx_pktfate[][30] = {
 	do { \
 		if (dump_msg_level & DUMP_EAPOL_VAL) { \
 			if (tx) { \
-				DHD_PKTDUMP(("[dhd-%s] 802_1X " x " [TX] : (%s) %s (%s)"DBGREPLAY TXFATE_FMT"\n", \
+				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] 802_1X " x " [TX] : (%s) %s (%s)"DBGREPLAY TXFATE_FMT"\n", \
 					ifname, ## args, \
 					tx?seabuf:deabuf, tx?"->":"<-", tx?deabuf:seabuf, \
 					REPLAY_FMT(eap_key), TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} else { \
-				DHD_PKTDUMP(("[dhd-%s] 802_1X " x " [RX] : (%s) %s (%s)"DBGREPLAY"\n", \
+				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] 802_1X " x " [RX] : (%s) %s (%s)"DBGREPLAY"\n", \
 					ifname, ## args, \
 					tx?seabuf:deabuf, tx?"->":"<-", tx?deabuf:seabuf, \
 					REPLAY_FMT(eap_key))); \
@@ -233,14 +233,14 @@ static const char tx_pktfate[][30] = {
 	do { \
 		if (dump_msg_level & DUMP_EAPOL_VAL) { \
 			if (tx) { \
-				DHD_PKTDUMP(("[dhd-%s] 802_1X " x " [TX] : (%s) %s (%s) " \
+				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] 802_1X " x " [TX] : (%s) %s (%s) " \
 					"ver %d, type %d"TXFATE_FMT"\n", \
 					ifname, ## args, \
 					tx?seabuf:deabuf, tx?"->":"<-", tx?deabuf:seabuf, \
 					eapol_hdr->version, eapol_hdr->type, \
 					TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} else { \
-				DHD_PKTDUMP(("[dhd-%s] 802_1X " x " [RX] : (%s) %s (%s) " \
+				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] 802_1X " x " [RX] : (%s) %s (%s) " \
 					"ver %d, type %d\n", \
 					ifname, ## args, \
 					tx?seabuf:deabuf, tx?"->":"<-", tx?deabuf:seabuf, \
@@ -253,7 +253,7 @@ static const char tx_pktfate[][30] = {
 	do { \
 		if (dump_msg_level & DUMP_EAPOL_VAL) { \
 			if (tx) { \
-				DHD_PKTDUMP(("[dhd-%s] 802_1X " x " [TX] : (%s) %s (%s) " \
+				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] 802_1X " x " [TX] : (%s) %s (%s) " \
 					"ver %d type %d keytype %d keyinfo 0x%02X"TXFATE_FMT"\n", \
 					ifname, ## args, \
 					tx?seabuf:deabuf, tx?"->":"<-", tx?deabuf:seabuf, \
@@ -261,7 +261,7 @@ static const char tx_pktfate[][30] = {
 					(uint32)hton16(eap_key->key_info), \
 					TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} else { \
-				DHD_PKTDUMP(("[dhd-%s] 802_1X " x " [RX] : (%s) %s (%s) " \
+				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] 802_1X " x " [RX] : (%s) %s (%s) " \
 					"ver %d type %d keytype %d keyinfo 0x%02X\n", \
 					ifname, ## args, \
 					tx?seabuf:deabuf, tx?"->":"<-", tx?deabuf:seabuf, \
@@ -1024,12 +1024,12 @@ dhd_check_dhcp(uint8 *pktdata)
 #define DHCP_PRINT(str) \
 	do { \
 		if (tx) { \
-			DHD_PKTDUMP(("[dhd-%s] " str " %8s[%8s] [TX] : %s(%s) %s %s(%s)"TXFATE_FMT"\n", \
+			DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] " str " %8s[%8s] [TX] : %s(%s) %s %s(%s)"TXFATE_FMT"\n", \
 				ifname, typestr, opstr, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 				tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, \
 				TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 		} else { \
-			DHD_PKTDUMP(("[dhd-%s] " str " %8s[%8s] [RX] : %s(%s) %s %s(%s)\n", \
+			DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] " str " %8s[%8s] [RX] : %s(%s) %s %s(%s)\n", \
 				ifname, typestr, opstr, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 				tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf)); \
 		} \
@@ -1151,12 +1151,12 @@ dhd_check_icmp(uint8 *pktdata)
 #define ICMP_PING_PRINT(str) \
 	do { \
 		if (tx) { \
-			DHD_PKTDUMP_MEM(("[dhd-%s] "str " [TX] : %s(%s) %s %s(%s) SEQNUM=%d" \
+			DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] "str " [TX] : %s(%s) %s %s(%s) SEQNUM=%d" \
 				TXFATE_FMT"\n", ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 				tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, seqnum, \
 				TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 		} else { \
-			DHD_PKTDUMP_MEM(("[dhd-%s] "str " [RX] : %s(%s) %s %s(%s) SEQNUM=%d\n", \
+			DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] "str " [RX] : %s(%s) %s %s(%s) SEQNUM=%d\n", \
 				ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 				tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, seqnum)); \
 		} \
@@ -1165,12 +1165,12 @@ dhd_check_icmp(uint8 *pktdata)
 #define ICMP_PRINT(str) \
 	do { \
 		if (tx) { \
-			DHD_PKTDUMP_MEM(("[dhd-%s] "str " [TX] : %s(%s) %s %s(%s) TYPE=%d, CODE=%d" \
+			DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] "str " [TX] : %s(%s) %s %s(%s) TYPE=%d, CODE=%d" \
 				TXFATE_FMT "\n", ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 				tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, type, code, \
 				TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 		} else { \
-			DHD_PKTDUMP_MEM(("[dhd-%s] "str " [RX] : %s(%s) %s %s(%s) TYPE=%d," \
+			DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] "str " [RX] : %s(%s) %s %s(%s) TYPE=%d," \
 				" CODE=%d\n", ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 				tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, type, code)); \
 		} \
@@ -1251,18 +1251,18 @@ dhd_check_arp(uint8 *pktdata, uint16 ether_type)
 	do { \
 		if (tx) { \
 			if (dump_enabled && pktfate && !TX_FATE_ACKED(pktfate)) { \
-				DHD_PKTDUMP(("[dhd-%s] "str " [TX] : %s(%s) %s %s(%s)"TXFATE_FMT"\n", \
+				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] "str " [TX] : %s(%s) %s %s(%s)"TXFATE_FMT"\n", \
 					ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 					tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, \
 					TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} else { \
-				DHD_PKTDUMP_MEM(("[dhd-%s] "str " [TX] : %s(%s) %s %s(%s)"TXFATE_FMT"\n", \
+				DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] "str " [TX] : %s(%s) %s %s(%s)"TXFATE_FMT"\n", \
 					ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 					tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, \
 					TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} \
 		} else { \
-			DHD_PKTDUMP_MEM(("[dhd-%s] "str " [RX] : %s(%s) %s %s(%s)\n", \
+			DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] "str " [RX] : %s(%s) %s %s(%s)\n", \
 				ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 				tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf)); \
 		} \
@@ -1272,18 +1272,18 @@ dhd_check_arp(uint8 *pktdata, uint16 ether_type)
 	do { \
 		if (tx) { \
 			if (dump_enabled && pktfate && !TX_FATE_ACKED(pktfate)) { \
-				DHD_PKTDUMP(("[dhd-%s] "str " [TX] : %s(%s) %s %s(%s) op_code=%d" \
+				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] "str " [TX] : %s(%s) %s %s(%s) op_code=%d" \
 					TXFATE_FMT "\n", ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 					tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, opcode, \
 					TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} else { \
-				DHD_PKTDUMP_MEM(("[dhd-%s] "str " [TX] : %s(%s) %s %s(%s) op_code=%d" \
+				DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] "str " [TX] : %s(%s) %s %s(%s) op_code=%d" \
 				TXFATE_FMT "\n", ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 					tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, opcode, \
 				TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} \
 		} else { \
-			DHD_PKTDUMP_MEM(("[dhd-%s] "str " [RX] : %s(%s) %s %s(%s) op_code=%d\n", \
+			DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] "str " [RX] : %s(%s) %s %s(%s) op_code=%d\n", \
 				ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 					tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, opcode)); \
 		} \
@@ -1387,18 +1387,18 @@ static const char dns_opcode_types[][11] = {
 	do { \
 		if (tx) { \
 			if (dump_enabled && pktfate && !TX_FATE_ACKED(pktfate)) { \
-				DHD_PKTDUMP(("[dhd-%s] " str " [TX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s" \
+				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] " str " [TX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s" \
 					TXFATE_FMT "\n", ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 					tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, \
 					id, DNSOPCODE(opcode), TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} else { \
-				DHD_PKTDUMP_MEM(("[dhd-%s] " str " [TX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s" \
+				DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] " str " [TX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s" \
 					TXFATE_FMT "\n", ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 					tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, \
 					id, DNSOPCODE(opcode), TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} \
 		} else { \
-			DHD_PKTDUMP_MEM(("[dhd-%s] " str " [RX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s\n", \
+			DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] " str " [RX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s\n", \
 				ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, tx?"->":"<-", \
 				tx?dabuf:sabuf, tx?deabuf:seabuf, id, DNSOPCODE(opcode))); \
 		} \
@@ -1408,18 +1408,18 @@ static const char dns_opcode_types[][11] = {
 	do { \
 		if (tx) { \
 			if (dump_enabled && pktfate && !TX_FATE_ACKED(pktfate)) { \
-				DHD_PKTDUMP(("[dhd-%s] " str " [TX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s RCODE:%d" \
+				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] " str " [TX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s RCODE:%d" \
 					TXFATE_FMT "\n", ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 					tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, id, DNSOPCODE(opcode), \
 					GET_DNS_RCODE(flags), TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} else { \
-				DHD_PKTDUMP_MEM(("[dhd-%s] " str " [TX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s RCODE:%d" \
+				DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] " str " [TX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s RCODE:%d" \
 					TXFATE_FMT "\n", ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 					tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, id, DNSOPCODE(opcode), \
 					GET_DNS_RCODE(flags), TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} \
 		} else { \
-			DHD_PKTDUMP_MEM(("[dhd-%s] " str " [RX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s RCODE:%d\n", \
+			DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] " str " [RX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s RCODE:%d\n", \
 				ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 				tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, \
 				id, DNSOPCODE(opcode), GET_DNS_RCODE(flags))); \
@@ -1515,13 +1515,13 @@ dhd_trx_pkt_dump(dhd_pub_t *dhdp, int ifidx, uint8 *pktdata, uint32 pktlen, bool
 
 	if (protocol != ETHER_TYPE_BRCM) {
 		if (pktdata[0] == 0xFF) {
-			DHD_PKTDUMP(("[dhd-%s] %s BROADCAST DUMP - %s\n",
+			DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] %s BROADCAST DUMP - %s\n",
 				dhd_ifname(dhdp, ifidx), tx?"TX":"RX", pkttype));
 		} else if (pktdata[0] & 1) {
-			DHD_PKTDUMP(("[dhd-%s] %s MULTICAST DUMP " MACDBG " - %s\n",
+			DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] %s MULTICAST DUMP " MACDBG " - %s\n",
 				dhd_ifname(dhdp, ifidx), tx?"TX":"RX", MAC2STRDBG(pktdata), pkttype));
 		} else {
-			DHD_PKTDUMP(("[dhd-%s] %s DUMP - %s\n",
+			DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] %s DUMP - %s\n",
 				dhd_ifname(dhdp, ifidx), tx?"TX":"RX", pkttype));
 		}
 #ifdef DHD_RX_FULL_DUMP
@@ -1529,7 +1529,7 @@ dhd_trx_pkt_dump(dhd_pub_t *dhdp, int ifidx, uint8 *pktdata, uint32 pktlen, bool
 #endif /* DHD_RX_FULL_DUMP */
 	}
 	else {
-		DHD_PKTDUMP(("[dhd-%s] %s DUMP - %s\n",
+		DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] %s DUMP - %s\n",
 			dhd_ifname(dhdp, ifidx), tx?"TX":"RX", pkttype));
 	}
 }

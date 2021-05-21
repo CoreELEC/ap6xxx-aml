@@ -5127,14 +5127,18 @@ int dhd_sync_with_dongle(dhd_pub_t *dhd)
 #endif /* DHD_SDTC_ETB_DUMP */
 #if defined(DHD_H2D_LOG_TIME_SYNC)
 #ifdef DHD_HP2P
-	if (FW_SUPPORTED(dhd, h2dlogts) || dhd->hp2p_capable) {
+	if (FW_SUPPORTED(dhd, h2dlogts) || dhd->hp2p_capable)
+#else
+	if (FW_SUPPORTED(dhd, h2dlogts))
+#endif // endif
+	{
+#ifdef DHD_HP2P
 		if (dhd->hp2p_enable) {
 			dhd->dhd_rte_time_sync_ms = DHD_H2D_LOG_TIME_STAMP_MATCH / 40;
 		} else {
 			dhd->dhd_rte_time_sync_ms = DHD_H2D_LOG_TIME_STAMP_MATCH;
 		}
 #else
-	if (FW_SUPPORTED(dhd, h2dlogts)) {
 		dhd->dhd_rte_time_sync_ms = DHD_H2D_LOG_TIME_STAMP_MATCH;
 #endif /* DHD_HP2P */
 		dhd->bus->dhd_rte_time_sync_count = OSL_SYSUPTIME_US();
@@ -12831,9 +12835,9 @@ dhd_prot_flow_ring_delete(dhd_pub_t *dhd, flow_ring_node_t *flow_ring_node)
 	flow_delete_rqst->flow_ring_id = htol16((uint16)flow_ring_node->flowid);
 	flow_delete_rqst->reason = htol16(BCME_OK);
 
-	DHD_ERROR(("%s: Send Flow Delete Req RING ID %d for peer " MACDBG
+	DHD_ERROR(("%s: Send Flow Delete Req RING ID %d for peer %pM"
 		" prio %d ifindex %d\n", __FUNCTION__, flow_ring_node->flowid,
-		MAC2STRDBG(flow_ring_node->flow_info.da), flow_ring_node->flow_info.tid,
+		flow_ring_node->flow_info.da, flow_ring_node->flow_info.tid,
 		flow_ring_node->flow_info.ifindex));
 
 	/* update ring's WR index and ring doorbell to dongle */

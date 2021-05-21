@@ -35,25 +35,25 @@
 #define AEXT_ERROR(name, arg1, args...) \
 	do { \
 		if (android_msg_level & ANDROID_ERROR_LEVEL) { \
-			printk(KERN_ERR "[dhd-%s] AEXT-ERROR) %s : " arg1, name, __func__, ## args); \
+			printk(KERN_ERR DHD_LOG_PREFIX "[%s] AEXT-ERROR) %s : " arg1, name, __func__, ## args); \
 		} \
 	} while (0)
 #define AEXT_TRACE(name, arg1, args...) \
 	do { \
 		if (android_msg_level & ANDROID_TRACE_LEVEL) { \
-			printk(KERN_INFO "[dhd-%s] AEXT-TRACE) %s : " arg1, name, __func__, ## args); \
+			printk(KERN_INFO DHD_LOG_PREFIX "[%s] AEXT-TRACE) %s : " arg1, name, __func__, ## args); \
 		} \
 	} while (0)
 #define AEXT_INFO(name, arg1, args...) \
 	do { \
 		if (android_msg_level & ANDROID_INFO_LEVEL) { \
-			printk(KERN_INFO "[dhd-%s] AEXT-INFO) %s : " arg1, name, __func__, ## args); \
+			printk(KERN_INFO DHD_LOG_PREFIX "[%s] AEXT-INFO) %s : " arg1, name, __func__, ## args); \
 		} \
 	} while (0)
 #define AEXT_DBG(name, arg1, args...) \
 	do { \
 		if (android_msg_level & ANDROID_DBG_LEVEL) { \
-			printk(KERN_INFO "[dhd-%s] AEXT-DBG) %s : " arg1, name, __func__, ## args); \
+			printk(KERN_INFO DHD_LOG_PREFIX "[%s] AEXT-DBG) %s : " arg1, name, __func__, ## args); \
 		} \
 	} while (0)
 
@@ -106,6 +106,7 @@ extern int disable_proptx;
 #endif /* WL_EXT_IAPSTA */
 #define CMD_AUTOCHANNEL		"AUTOCHANNEL"
 #define CMD_WL		"WL"
+#define CMD_CONF	"CONF"
 
 #ifdef WL_EXT_IAPSTA
 typedef enum APSTAMODE {
@@ -307,6 +308,44 @@ typedef struct tcpka_conn_info {
 	uint32 ack;
 } tcpka_conn_sess_info_t;
 #endif /* WL_EXT_TCPKA */
+
+typedef struct auth_name_map_t {
+	uint auth;
+	uint wpa_auth;
+	char *auth_name;
+} auth_name_map_t;
+
+const auth_name_map_t auth_name_map[] = {
+	{WL_AUTH_OPEN_SYSTEM,	WPA_AUTH_DISABLED,	"open"},
+	{WL_AUTH_SHARED_KEY,	WPA_AUTH_DISABLED,	"shared"},
+	{WL_AUTH_OPEN_SYSTEM,	WPA_AUTH_PSK,		"wpapsk"},
+	{WL_AUTH_OPEN_SYSTEM,	WPA2_AUTH_PSK,		"wpa2psk"},
+	{WL_AUTH_OPEN_SYSTEM,	WPA2_AUTH_PSK_SHA256|WPA2_AUTH_PSK,	"wpa2psksha256"},
+	{WL_AUTH_OPEN_SYSTEM,	WPA2_AUTH_FT|WPA2_AUTH_PSK,			"wpa2psk-ft"},
+	{WL_AUTH_OPEN_SYSTEM,	WPA2_AUTH_UNSPECIFIED,				"wpa2eap"},
+	{WL_AUTH_OPEN_SYSTEM,	WPA2_AUTH_FT|WPA2_AUTH_UNSPECIFIED,	"wpa2eap-ft"},
+	{WL_AUTH_OPEN_SYSTEM,	WPA3_AUTH_SAE_PSK|WPA2_AUTH_PSK,	"wpa3psk"},
+	{WL_AUTH_SAE_KEY,		WPA3_AUTH_SAE_PSK|WPA2_AUTH_PSK,	"wpa3psk"},
+	{WL_AUTH_OPEN_SYSTEM,	0x20,	"wpa3psk"},
+	{WL_AUTH_SAE_KEY,		0x20,	"wpa3psk"},
+	{WL_AUTH_OPEN_SYSTEM,	WPA3_AUTH_SAE_PSK|WPA2_AUTH_PSK_SHA256|WPA2_AUTH_PSK,	"wpa3psksha256"},
+	{WL_AUTH_SAE_KEY,		WPA3_AUTH_SAE_PSK|WPA2_AUTH_PSK_SHA256|WPA2_AUTH_PSK,	"wpa3psksha256"},
+	{WL_AUTH_OPEN_SYSTEM,	0x20|WPA2_AUTH_PSK_SHA256|WPA2_AUTH_PSK,	"wpa3psksha256"},
+	{WL_AUTH_SAE_KEY,		0x20|WPA2_AUTH_PSK_SHA256|WPA2_AUTH_PSK,	"wpa3psksha256"},
+};
+
+typedef struct wsec_name_map_t {
+	uint wsec;
+	char *wsec_name;
+} wsec_name_map_t;
+
+const wsec_name_map_t wsec_name_map[] = {
+	{WSEC_NONE,		"none"},
+	{WEP_ENABLED,	"wep"},
+	{TKIP_ENABLED,	"tkip"},
+	{AES_ENABLED,	"aes"},
+	{TKIP_ENABLED|AES_ENABLED,	"tkipaes"},
+};
 
 static int wl_ext_wl_iovar(struct net_device *dev, char *command, int total_len);
 
@@ -1007,7 +1046,7 @@ wl_ext_connect(struct net_device *dev, struct wl_conn_info *conn_info)
 	}
 	ext_join_params->assoc.chanspec_num = htod32(ext_join_params->assoc.chanspec_num);
 
-	wl_ext_get_sec(dev, 0, sec, sizeof(sec));
+	wl_ext_get_sec(dev, 0, sec, sizeof(sec), TRUE);
 	WL_MSG(dev->name,
 		"Connecting with %pM channel (%d) ssid \"%s\", len (%d), sec=%s\n\n",
 		&ext_join_params->assoc.bssid, conn_info->channel,
@@ -1046,7 +1085,7 @@ set_ssid:
 		AEXT_INFO(dev->name, "ssid \"%s\", len (%d)\n", join_params.ssid.SSID,
 			join_params.ssid.SSID_len);
 	}
-	wl_ext_get_sec(dev, 0, sec, sizeof(sec));
+	wl_ext_get_sec(dev, 0, sec, sizeof(sec), TRUE);
 	WL_MSG(dev->name,
 		"Connecting with %pM channel (%d) ssid \"%s\", len (%d), sec=%s\n\n",
 		&join_params.params.bssid, conn_info->channel,
@@ -1067,10 +1106,11 @@ exit:
 }
 
 void
-wl_ext_get_sec(struct net_device *dev, int ifmode, char *sec, int total_len)
+wl_ext_get_sec(struct net_device *dev, int ifmode, char *sec, int total_len, bool dump)
 {
-	int auth=0, wpa_auth=0, wsec=0, mfp=0, wsec_tmp;
+	int auth=0, wpa_auth=0, wsec=0, mfp=0, i;
 	int bytes_written=0;
+	bool match = FALSE;
 
 	memset(sec, 0, total_len);
 	wl_ext_iovar_getint(dev, "auth", &auth);
@@ -1091,29 +1131,16 @@ wl_ext_get_sec(struct net_device *dev, int ifmode, char *sec, int total_len)
 	} else
 #endif /* WL_EXT_IAPSTA */
 	{
-		if (auth == WL_AUTH_OPEN_SYSTEM && wpa_auth == WPA_AUTH_DISABLED) {
-			bytes_written += snprintf(sec+bytes_written, total_len, "open");
-		} else if (auth == WL_AUTH_SHARED_KEY && wpa_auth == WPA_AUTH_DISABLED) {
-			bytes_written += snprintf(sec+bytes_written, total_len, "shared");
-		} else if (auth == WL_AUTH_OPEN_SYSTEM && wpa_auth == WPA_AUTH_PSK) {
-			bytes_written += snprintf(sec+bytes_written, total_len, "wpapsk");
-		} else if (auth == WL_AUTH_OPEN_SYSTEM && wpa_auth == WPA2_AUTH_PSK) {
-			bytes_written += snprintf(sec+bytes_written, total_len, "wpa2psk");
-		} else if (auth == WL_AUTH_OPEN_SYSTEM && wpa_auth == WPA2_AUTH_UNSPECIFIED) {
-			bytes_written += snprintf(sec+bytes_written, total_len, "wpa2eap");
-		} else if (auth == WL_AUTH_OPEN_SYSTEM &&
-				wpa_auth == (WPA2_AUTH_FT|WPA2_AUTH_PSK)) {
-			bytes_written += snprintf(sec+bytes_written, total_len, "wpa2psk-ft");
-		} else if (auth == WL_AUTH_OPEN_SYSTEM &&
-				wpa_auth == (WPA2_AUTH_FT|WPA2_AUTH_UNSPECIFIED)) {
-			bytes_written += snprintf(sec+bytes_written, total_len, "wpa2eap-ft");
-		} else if ((auth == WL_AUTH_OPEN_SYSTEM || auth == WL_AUTH_SAE_KEY) &&
-				wpa_auth == WPA3_AUTH_SAE_PSK) {
-			bytes_written += snprintf(sec+bytes_written, total_len, "wpa3");
-		} else if ((auth == WL_AUTH_OPEN_SYSTEM || auth == WL_AUTH_SAE_KEY) &&
-				wpa_auth == 0x20) {
-			bytes_written += snprintf(sec+bytes_written, total_len, "wpa3");
-		} else {
+		match = FALSE;
+		for (i=0; i<sizeof(auth_name_map)/sizeof(auth_name_map[0]); i++) {
+			const auth_name_map_t* row = &auth_name_map[i];
+			if (row->auth == auth && row->wpa_auth == wpa_auth) {
+				bytes_written += snprintf(sec+bytes_written, total_len, row->auth_name);
+				match = TRUE;
+				break;
+			}
+		}
+		if (!match) {
 			bytes_written += snprintf(sec+bytes_written, total_len, "%d/0x%x",
 				auth, wpa_auth);
 		}
@@ -1139,23 +1166,24 @@ wl_ext_get_sec(struct net_device *dev, int ifmode, char *sec, int total_len)
 	} else
 #endif /* WL_EXT_IAPSTA */
 	{
-		wsec_tmp = wsec & 0xf;
-		if (wsec_tmp == WSEC_NONE) {
-			bytes_written += snprintf(sec+bytes_written, total_len, "/none");
-		} else if (wsec_tmp == WEP_ENABLED) {
-			bytes_written += snprintf(sec+bytes_written, total_len, "/wep");
-		} else if (wsec_tmp == (TKIP_ENABLED|AES_ENABLED) ||
-				wsec_tmp == (WSEC_SWFLAG|TKIP_ENABLED|AES_ENABLED)) {
-			bytes_written += snprintf(sec+bytes_written, total_len, "/tkipaes");
-		} else if (wsec_tmp == TKIP_ENABLED || wsec_tmp == (WSEC_SWFLAG|TKIP_ENABLED)) {
-			bytes_written += snprintf(sec+bytes_written, total_len, "/tkip");
-		} else if (wsec_tmp == AES_ENABLED || wsec_tmp == (WSEC_SWFLAG|AES_ENABLED)) {
-			bytes_written += snprintf(sec+bytes_written, total_len, "/aes");
-		} else {
+		match = FALSE;
+		for (i=0; i<sizeof(wsec_name_map)/sizeof(wsec_name_map[0]); i++) {
+			const wsec_name_map_t* row = &wsec_name_map[i];
+			if (row->wsec == (wsec&0x7)) {
+				bytes_written += snprintf(sec+bytes_written, total_len, "/%s",
+					row->wsec_name);
+				match = TRUE;
+				break;
+			}
+		}
+		if (!match) {
 			bytes_written += snprintf(sec+bytes_written, total_len, "/0x%x", wsec);
 		}
 	}
-
+	if (dump) {
+		AEXT_INFO(dev->name, "auth/wpa_auth/mfp/wsec = %d/0x%x/%d/0x%x\n",
+			auth, wpa_auth, mfp, wsec);
+	}
 }
 
 static bool
@@ -1214,12 +1242,12 @@ wl_ext_wlmsglevel(struct net_device *dev, char *command, int total_len)
 	if (val >=0) {
 		if (val & DHD_ANDROID_VAL) {
 			android_msg_level = (uint)(val & 0xFFFF);
-			printf("android_msg_level=0x%x\n", android_msg_level);
+			WL_MSG(dev->name, "android_msg_level=0x%x\n", android_msg_level);
 		}
 #if defined(WL_WIRELESS_EXT)
 		else if (val & DHD_IW_VAL) {
 			iw_msg_level = (uint)(val & 0xFFFF);
-			printf("iw_msg_level=0x%x\n", iw_msg_level);
+			WL_MSG(dev->name, "iw_msg_level=0x%x\n", iw_msg_level);
 		}
 #endif
 #ifdef WL_CFG80211
@@ -1229,11 +1257,11 @@ wl_ext_wlmsglevel(struct net_device *dev, char *command, int total_len)
 #endif
 		else if (val & DHD_CONFIG_VAL) {
 			config_msg_level = (uint)(val & 0xFFFF);
-			printf("config_msg_level=0x%x\n", config_msg_level);
+			WL_MSG(dev->name, "config_msg_level=0x%x\n", config_msg_level);
 		}
 		else if (val & DHD_DUMP_VAL) {
 			dump_msg_level = (uint)(val & 0xFFFF);
-			printf("dump_msg_level=0x%x\n", dump_msg_level);
+			WL_MSG(dev->name, "dump_msg_level=0x%x\n", dump_msg_level);
 		}
 	}
 	else {
@@ -1257,6 +1285,49 @@ wl_ext_wlmsglevel(struct net_device *dev, char *command, int total_len)
 
 	return ret;
 }
+
+#ifdef WLEASYMESH
+#define CMD_EASYMESH "EASYMESH"
+//Set map 4 and dwds 1 on wlan0 interface
+#define EASYMESH_SLAVE		"slave"
+#define EASYMESH_MASTER		"master"
+
+static int
+wl_ext_easymesh(struct net_device *dev, char* command, int total_len)
+{
+	int ret = 0, wlc_down = 1, wlc_up = 1, map = 4, dwds = 1;
+
+	AEXT_TRACE(dev->name, "command=%s, len=%d\n", command, total_len);
+	if (strncmp(command, EASYMESH_SLAVE, strlen(EASYMESH_SLAVE)) == 0) {
+		WL_MSG(dev->name, "try to set map %d, dwds %d\n", map, dwds);
+		ret = wl_ext_ioctl(dev, WLC_DOWN, &wlc_down, sizeof(wlc_down), 1);
+		if (ret)
+			goto exit;
+		wl_ext_iovar_setint(dev, "map", map);
+		wl_ext_iovar_setint(dev, "dwds", dwds);
+		ret = wl_ext_ioctl(dev, WLC_UP, &wlc_up, sizeof(wlc_up), 1);
+		if (ret)
+			goto exit;
+	}
+	else if (strncmp(command, EASYMESH_MASTER, strlen(EASYMESH_MASTER)) == 0) {
+		map = dwds = 0;
+		WL_MSG(dev->name, "try to set map %d, dwds %d\n", map, dwds);
+		ret = wl_ext_ioctl(dev, WLC_DOWN, &wlc_down, sizeof(wlc_down), 1);
+		if (ret) {
+			goto exit;
+		}
+		wl_ext_iovar_setint(dev, "map", map);
+		wl_ext_iovar_setint(dev, "dwds", dwds);
+		ret = wl_ext_ioctl(dev, WLC_UP, &wlc_up, sizeof(wlc_up), 1);
+		if (ret) {
+			goto exit;
+		}
+	}
+
+exit:
+	return ret;
+}
+#endif /* WLEASYMESH */
 
 #if defined(SENDPROB) || (defined(WLMESH) && defined(WL_ESCAN))
 static int
@@ -3034,7 +3105,7 @@ wl_mesh_update_mesh_info(struct wl_apsta_params *apsta_params,
 		bool sae = FALSE;
 		memset(&peer_mesh_info, 0, sizeof(struct wl_mesh_params));
 		wl_ext_ioctl(mesh_if->dev, WLC_GET_SSID, &cur_ssid, sizeof(cur_ssid), 0);
-		wl_ext_get_sec(mesh_if->dev, mesh_if->ifmode, sec, sizeof(sec));
+		wl_ext_get_sec(mesh_if->dev, mesh_if->ifmode, sec, sizeof(sec), FALSE);
 		if (strnicmp(sec, "sae/sae", strlen("sae/sae")) == 0)
 			sae = TRUE;
 		cur_chan = wl_ext_get_chan(apsta_params, mesh_if->dev);
@@ -3225,7 +3296,7 @@ wl_ext_isam_peer_path(struct net_device *dev, char *command, int total_len)
 				chan = wl_ext_get_chan(apsta_params, tmp_if->dev);
 				if (chan) {
 					dump_written += snprintf(dump_buf+dump_written, dump_len,
-						"[dhd-%s-%c] mbssid=%pM, mchan=%d, hop=%d, pbssid=%pM",
+						DHD_LOG_PREFIX "[%s-%c] mbssid=%pM, mchan=%d, hop=%d, pbssid=%pM",
 						tmp_if->ifname, tmp_if->prefix, &mesh_info->master_bssid,
 						mesh_info->master_channel, mesh_info->hop_cnt,
 						&mesh_info->peer_bssid);
@@ -3288,9 +3359,9 @@ wl_ext_isam_status(struct net_device *dev, char *command, int total_len)
 					wldev_ioctl(tmp_if->dev, WLC_GET_RSSI, &scb_val,
 						sizeof(scb_val_t), 0);
 					chanspec = wl_ext_get_chanspec(apsta_params, tmp_if->dev);
-					wl_ext_get_sec(tmp_if->dev, tmp_if->ifmode, sec, sizeof(sec));
+					wl_ext_get_sec(tmp_if->dev, tmp_if->ifmode, sec, sizeof(sec), FALSE);
 					dump_written += snprintf(dump_buf+dump_written, dump_len,
-						"\n[dhd-%s-%c]: bssid=%pM, chan=%3d(0x%x %sMHz), "
+						"\n" DHD_LOG_PREFIX "[%s-%c]: bssid=%pM, chan=%3d(0x%x %sMHz), "
 						"rssi=%3d, sec=%-15s, SSID=\"%s\"",
 						tmp_if->ifname, tmp_if->prefix, &bssid, chan, chanspec,
 						CHSPEC_IS20(chanspec)?"20":
@@ -3311,7 +3382,7 @@ wl_ext_isam_status(struct net_device *dev, char *command, int total_len)
 #endif /* WLMESH */
 				} else {
 					dump_written += snprintf(dump_buf+dump_written, dump_len,
-						"\n[dhd-%s-%c]:", tmp_if->ifname, tmp_if->prefix);
+						"\n" DHD_LOG_PREFIX "[%s-%c]:", tmp_if->ifname, tmp_if->prefix);
 				}
 			}
 		}
@@ -4523,6 +4594,26 @@ wl_legacy_chip_check(struct net_device *net)
 }
 
 bool
+wl_extsae_chip(struct dhd_pub *dhd)
+{
+	uint chip;
+
+	chip = dhd_conf_get_chip(dhd);
+
+	if (chip == BCM43362_CHIP_ID || chip == BCM4330_CHIP_ID ||
+		chip == BCM4334_CHIP_ID || chip == BCM43340_CHIP_ID ||
+		chip == BCM43341_CHIP_ID || chip == BCM4324_CHIP_ID ||
+		chip == BCM4335_CHIP_ID || chip == BCM4339_CHIP_ID ||
+		chip == BCM4354_CHIP_ID || chip == BCM4356_CHIP_ID ||
+		chip == BCM43143_CHIP_ID || chip == BCM43242_CHIP_ID ||
+		chip == BCM43569_CHIP_ID) {
+		return false;
+	}
+
+	return true;
+}
+
+bool
 wl_new_chip_check(struct net_device *net)
 {
 	struct dhd_pub *dhd = dhd_get_pub(net);
@@ -4530,8 +4621,8 @@ wl_new_chip_check(struct net_device *net)
 
 	chip = dhd_conf_get_chip(dhd);
 
-	if (chip == BCM4359_CHIP_ID ||
-			chip == BCM43012_CHIP_ID || chip == BCM43752_CHIP_ID) {
+	if (chip == BCM4359_CHIP_ID || chip == BCM43012_CHIP_ID ||
+			chip == BCM43751_CHIP_ID || chip == BCM43752_CHIP_ID) {
 		return true;
 	}
 
@@ -4796,9 +4887,9 @@ wl_ext_in4way_sync_sta(dhd_pub_t *dhd, struct wl_if_info *cur_if,
 			if (action & (STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY)) {
 				if (apsta_params->sta_handshaking) {
 					if ((action & STA_NO_BTC_IN4WAY) && apsta_params->sta_btc_mode) {
-						AEXT_INFO(dev->name, "status=%d, restore sta_btc_mode %d\n",
+						AEXT_INFO(dev->name, "status=%d, restore btc_mode %d\n",
 							status, apsta_params->sta_btc_mode);
-						wldev_iovar_setint(dev, "sta_btc_mode", apsta_params->sta_btc_mode);
+						wldev_iovar_setint(dev, "btc_mode", apsta_params->sta_btc_mode);
 					}
 					apsta_params->sta_handshaking = 0;
 				}
@@ -4833,11 +4924,11 @@ wl_ext_in4way_sync_sta(dhd_pub_t *dhd, struct wl_if_info *cur_if,
 				if (wpa_auth >= 2 && cur_if->bssidx == 0) {
 					apsta_params->sta_handshaking = 1;
 					if (action & STA_NO_BTC_IN4WAY) {
-						err = wldev_iovar_getint(dev, "sta_btc_mode", &apsta_params->sta_btc_mode);
+						err = wldev_iovar_getint(dev, "btc_mode", &apsta_params->sta_btc_mode);
 						if (!err && apsta_params->sta_btc_mode) {
-							AEXT_INFO(dev->name, "status=%d, disable current sta_btc_mode %d\n",
+							AEXT_INFO(dev->name, "status=%d, disable current btc_mode %d\n",
 								status, apsta_params->sta_btc_mode);
-							wldev_iovar_setint(dev, "sta_btc_mode", 0);
+							wldev_iovar_setint(dev, "btc_mode", 0);
 						}
 					}
 				}
@@ -4860,6 +4951,26 @@ wl_ext_in4way_sync_sta(dhd_pub_t *dhd, struct wl_if_info *cur_if,
 				}
 				wake_up_interruptible(&dhd->conf->event_complete);
 			}
+#ifdef WL_CLIENT_SAE
+			if (action & STA_START_AUTH_DELAY) {
+				struct wireless_dev *wdev = dev->ieee80211_ptr;
+				max_wait_cnt = 30;
+				while (max_wait_cnt) {
+					if (wdev->conn_owner_nlportid)
+						break;
+					AEXT_INFO(dev->name, "status=%d, max_wait_cnt=%d, waiting...\n",
+						status, max_wait_cnt);
+					mutex_unlock(&apsta_params->in4way_sync);
+					OSL_SLEEP(10);
+					mutex_lock(&apsta_params->in4way_sync);
+					max_wait_cnt--;
+				}
+				if (max_wait_cnt == 0) {
+					ret = -1;
+					break;
+				}
+			}
+#endif
 			break;
 		case WL_EXT_STATUS_CONNECTED:
 			if (cur_if->ifmode == ISTA_MODE) {
@@ -4883,9 +4994,9 @@ wl_ext_in4way_sync_sta(dhd_pub_t *dhd, struct wl_if_info *cur_if,
 			if (action & (STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY)) {
 				if (apsta_params->sta_handshaking) {
 					if ((action & STA_NO_BTC_IN4WAY) && apsta_params->sta_btc_mode) {
-						AEXT_INFO(dev->name, "status=%d, restore sta_btc_mode %d\n",
+						AEXT_INFO(dev->name, "status=%d, restore btc_mode %d\n",
 							status, apsta_params->sta_btc_mode);
-						wldev_iovar_setint(dev, "sta_btc_mode", apsta_params->sta_btc_mode);
+						wldev_iovar_setint(dev, "btc_mode", apsta_params->sta_btc_mode);
 					}
 					apsta_params->sta_handshaking = 0;
 				}
@@ -4900,9 +5011,9 @@ wl_ext_in4way_sync_sta(dhd_pub_t *dhd, struct wl_if_info *cur_if,
 			if (action & (STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY)) {
 				if (apsta_params->sta_handshaking) {
 					if ((action & STA_NO_BTC_IN4WAY) && apsta_params->sta_btc_mode) {
-						AEXT_INFO(dev->name, "status=%d, restore sta_btc_mode %d\n",
+						AEXT_INFO(dev->name, "status=%d, restore btc_mode %d\n",
 							status, apsta_params->sta_btc_mode);
-						wldev_iovar_setint(dev, "sta_btc_mode", apsta_params->sta_btc_mode);
+						wldev_iovar_setint(dev, "btc_mode", apsta_params->sta_btc_mode);
 					}
 					apsta_params->sta_handshaking = 0;
 				}
@@ -4952,15 +5063,14 @@ wl_ext_in4way_sync_ap(dhd_pub_t *dhd, struct wl_if_info *cur_if,
 			if (action & AP_WAIT_STA_RECONNECT) {
 				osl_do_gettimeofday(&cur_ts);
 				diff_ms = osl_do_gettimediff(&cur_ts, ap_disc_sta_ts)/1000;
-				if (mac_addr && diff_ms < max_wait_time) {
-					if (cur_if->ifmode == IAP_MODE &&
-							!memcmp(ap_disc_sta_bssid, mac_addr, ETHER_ADDR_LEN)) {
-						wait = TRUE;
-					} else if (cur_if->ifmode == IGO_MODE &&
-							cur_if->eapol_status == EAPOL_STATUS_WSC_DONE &&
-							memcmp(&ether_bcast, mac_addr, ETHER_ADDR_LEN)) {
-						wait = TRUE;
-					}
+				if (cur_if->ifmode == IAP_MODE &&
+						mac_addr && diff_ms < max_wait_time &&
+						!memcmp(ap_disc_sta_bssid, mac_addr, ETHER_ADDR_LEN)) {
+					wait = TRUE;
+				} else if (cur_if->ifmode == IGO_MODE &&
+						cur_if->eapol_status == EAPOL_STATUS_WSC_DONE &&
+						memcmp(&ether_bcast, mac_addr, ETHER_ADDR_LEN)) {
+					wait = TRUE;
 				}
 				if (wait) {
 					AEXT_INFO(dev->name, "status=%d, ap_recon_sta=%d, waiting %dms ...\n",
@@ -5039,6 +5149,66 @@ wl_ext_in4way_sync(struct net_device *dev, uint action,
 	mutex_unlock(&apsta_params->in4way_sync);
 
 	return ret;
+}
+
+void
+wl_ext_update_extsae_4way(struct net_device *dev,
+	const struct ieee80211_mgmt *mgmt, bool tx)
+{
+	dhd_pub_t *dhd = dhd_get_pub(dev);
+	struct wl_if_info *cur_if = NULL;
+	uint32 auth_alg, auth_seq;
+	uint eapol_status = 0;
+
+	cur_if = wl_get_cur_if(dev);
+	if (!cur_if)
+		return;
+
+	auth_alg = mgmt->u.auth.auth_alg;
+	auth_seq = mgmt->u.auth.auth_transaction;
+	if (auth_alg == WLAN_AUTH_SAE) {
+		if (cur_if->ifmode == ISTA_MODE || cur_if->ifmode == IGC_MODE) {
+			if (auth_seq == 1) {
+				if (tx)
+					eapol_status = AUTH_SAE_COMMIT_M1;
+				else
+					eapol_status = AUTH_SAE_COMMIT_M2;
+			} else if (auth_seq == 2) {
+				if (tx)
+					eapol_status = AUTH_SAE_CONFIRM_M3;
+				else
+					eapol_status = AUTH_SAE_CONFIRM_M4;
+			}
+		} else if (cur_if->ifmode == IAP_MODE || cur_if->ifmode == IGO_MODE) {
+			if (auth_seq == 1) {
+				if (tx)
+					eapol_status = AUTH_SAE_COMMIT_M2;
+				else
+					eapol_status = AUTH_SAE_COMMIT_M1;
+			} else if (auth_seq == 2) {
+				if (tx)	
+					eapol_status = AUTH_SAE_CONFIRM_M4;
+				else
+					eapol_status = AUTH_SAE_CONFIRM_M3;
+			}
+		}
+	}
+	if (eapol_status) {
+		wl_ext_update_eapol_status(dhd, cur_if->ifidx, eapol_status);
+		if (dump_msg_level & DUMP_EAPOL_VAL) {
+			if (tx) {
+				WL_MSG(dev->name, "WPA3 SAE M%d [TX] : (%pM) -> (%pM)\n",
+					eapol_status-AUTH_SAE_COMMIT_M1+1, mgmt->sa, mgmt->da);
+			} else {
+				WL_MSG(dev->name, "WPA3 SAE M%d [RX] : (%pM) <- (%pM)\n",
+					eapol_status-AUTH_SAE_COMMIT_M1+1, mgmt->da, mgmt->sa);
+			}
+		}
+	} else {
+		WL_ERR(("Unknown auth_alg=%d or auth_seq=%d\n", auth_alg, auth_seq));
+	}
+
+	return;
 }
 #endif /* WL_CFG80211 */
 
@@ -5174,7 +5344,7 @@ wl_ext_iapsta_get_rsdb(struct net_device *net, struct dhd_pub *dhd)
 	wl_config_t *rsdb_p;
 	int ret = 0, rsdb = 0;
 
-	if (dhd->conf->chip == BCM4359_CHIP_ID) {
+	if (dhd->conf->chip == BCM4359_CHIP_ID || dhd->conf->chip == BCM4375_CHIP_ID) {
 		ret = wldev_iovar_getbuf(net, "rsdb_mode", NULL, 0,
 			iovar_buf, WLC_IOCTL_SMLEN, NULL);
 		if (!ret) {
@@ -5182,7 +5352,12 @@ wl_ext_iapsta_get_rsdb(struct net_device *net, struct dhd_pub *dhd)
 				rsdb = 1;
 			} else {
 				rsdb_p = (wl_config_t *) iovar_buf;
-				rsdb = rsdb_p->config;
+				if (dhd->conf->chip == BCM4375_CHIP_ID)
+					rsdb = rsdb_p->status;
+				else
+					rsdb = rsdb_p->config;
+				AEXT_INFO(net->name, "config=%d, status=%d\n",
+					rsdb_p->config, rsdb_p->status);
 			}
 		}
 	}
@@ -5604,6 +5779,7 @@ wl_ext_tcpka_conn_add(struct net_device *dev, char *data, char *command,
 		if (tcpka == NULL) {
 			AEXT_ERROR(dev->name, "Failed to allocate buffer of %d bytes\n",
 				sizeof(struct tcpka_conn) + ka_payload_len);
+			ret = -1;
 			goto exit;
 		}
 		memset(tcpka, 0, sizeof(struct tcpka_conn) + ka_payload_len);
@@ -5611,14 +5787,17 @@ wl_ext_tcpka_conn_add(struct net_device *dev, char *data, char *command,
 		tcpka->sess_id = sess_id;
 		if (!(ret = bcm_ether_atoe(dst_mac, &tcpka->dst_mac))) {
 			AEXT_ERROR(dev->name, "mac parsing err addr=%s\n", dst_mac);
+			ret = -1;
 			goto exit;
 		}
 		if (!bcm_atoipv4(src_ip, &tcpka->src_ip)) {
 			AEXT_ERROR(dev->name, "src_ip parsing err ip=%s\n", src_ip);
+			ret = -1;
 			goto exit;
 		}
 		if (!bcm_atoipv4(dst_ip, &tcpka->dst_ip)) {
 			AEXT_ERROR(dev->name, "dst_ip parsing err ip=%s\n", dst_ip);
+			ret = -1;
 			goto exit;
 		}
 		tcpka->ipid = ipid;
@@ -5633,6 +5812,7 @@ wl_ext_tcpka_conn_add(struct net_device *dev, char *data, char *command,
 		ka_payload_len = wl_pattern_atoh(ka_payload, (char *)tcpka->ka_payload);
 		if (ka_payload_len == -1) {
 			AEXT_ERROR(dev->name,"rejecting ka_payload=%s\n", ka_payload);
+			ret = -1;
 			goto exit;
 		}
 		tcpka->ka_payload_len = ka_payload_len;
@@ -6160,8 +6340,8 @@ wl_ext_recv_probreq(struct net_device *dev, char *data, char *command,
 				goto exit;
 			dhd->recv_probereq = TRUE;
 		} else {
-			if (dhd->conf->pm)
-				strcpy(cmd, "wl 86 2"); {
+			if (dhd->conf->pm) {
+				strcpy(cmd, "wl 86 2");
 				wl_ext_wl_iovar(dev, cmd, total_len);
 			}
 			strcpy(cmd, "wl event_msg 44 0");
@@ -6658,6 +6838,42 @@ exit:
 }
 #endif /* CSI_SUPPORT */
 
+static int
+wl_ext_get_country(struct net_device *dev, char *data, char *command,
+	int total_len)
+{
+	struct dhd_pub *dhd = dhd_get_pub(dev);
+	wl_country_t cspec = {{0}, 0, {0}};
+	int bytes_written = 0, ret = 0;
+
+	if (data) {
+		char *country_code = data;
+		char *rev_info_delim = country_code + 2; /* 2 bytes of country code */
+		int revinfo = -1;
+		if ((rev_info_delim) &&
+			(strnicmp(rev_info_delim, "/", strlen("/")) == 0) && (rev_info_delim + 1)) {
+			revinfo  = bcm_atoi(rev_info_delim + 1);
+		}
+#ifdef WL_CFG80211
+		bytes_written = wl_cfg80211_set_country_code(dev, country_code,
+			true, true, revinfo);
+#else
+		bytes_written = wldev_set_country(dev, country_code, true, true, revinfo);
+#endif /* WL_CFG80211 */
+	} else {
+		ret = dhd_conf_get_country(dhd, &cspec);
+		if (!ret) {
+			bytes_written += snprintf(command+bytes_written, total_len,
+				"%s/%d", cspec.ccode, cspec.rev);
+		}
+		if (!bytes_written)
+			bytes_written = -1;
+		AEXT_TRACE(dev->name, "command result is %s\n", command);
+	}
+
+	return bytes_written;
+}
+
 typedef int (wl_ext_tpl_parse_t)(struct net_device *dev, char *data, char *command,
 	int total_len);
 
@@ -6707,6 +6923,7 @@ const wl_ext_iovar_tpl_t wl_ext_iovar_tpl_list[] = {
 #ifdef CSI_SUPPORT
 	{WLC_GET_VAR,	WLC_SET_VAR,	"csi",				wl_ext_csi},
 #endif /* CSI_SUPPORT */
+	{WLC_GET_VAR,	WLC_SET_VAR,	"country",			wl_ext_get_country},
 };
 
 /*
@@ -6788,6 +7005,45 @@ exit:
 }
 
 int
+wl_ext_conf_iovar(struct net_device *dev, char *command, int total_len)
+{
+	int ret = 0;
+	char name[32], *pch, *pick_tmp, *data;
+	int bytes_written=-1;
+	struct dhd_pub *dhd = dhd_get_pub(dev);
+
+	AEXT_TRACE(dev->name, "cmd %s\n", command);
+	pick_tmp = command;
+
+	pch = bcmstrtok(&pick_tmp, " ", 0); // pick conf
+	if (!pch || strncmp(pch, "conf", 4))
+		goto exit;
+
+	pch = bcmstrtok(&pick_tmp, " ", 0); // pick cmd
+	if (!pch)
+		goto exit;
+
+	strncpy(name, pch, sizeof(name));
+	
+	data = bcmstrtok(&pick_tmp, "", 0); // pick data
+
+	if (!strcmp(name, "pm")) {
+		if (data) {
+			dhd->conf->pm = simple_strtol(data, NULL, 0);
+			ret = 0;
+		} else {
+			bytes_written = snprintf(command, total_len, "%d", dhd->conf->pm);
+			ret = bytes_written;
+		}
+	} else {
+		AEXT_ERROR(dev->name, "no config parameter found\n");
+	}
+
+exit:
+	return ret;
+}
+
+int
 wl_android_ext_priv_cmd(struct net_device *net, char *command,
 	int total_len, int *bytes_written)
 {
@@ -6855,8 +7111,17 @@ wl_android_ext_priv_cmd(struct net_device *net, char *command,
 	else if (strnicmp(command, CMD_WLMSGLEVEL, strlen(CMD_WLMSGLEVEL)) == 0) {
 		*bytes_written = wl_ext_wlmsglevel(net, command, total_len);
 	}
+#ifdef WLEASYMESH
+    else if (strnicmp(command, CMD_EASYMESH, strlen(CMD_EASYMESH)) == 0) {
+		int skip = strlen(CMD_EASYMESH) + 1;
+		*bytes_written = wl_ext_easymesh(net, command+skip, total_len);
+    }
+#endif /* WLEASYMESH */
 	else if (strnicmp(command, CMD_WL, strlen(CMD_WL)) == 0) {
 		*bytes_written = wl_ext_wl_iovar(net, command, total_len);
+	}
+	else if (strnicmp(command, CMD_CONF, strlen(CMD_CONF)) == 0) {
+		*bytes_written = wl_ext_conf_iovar(net, command, total_len);
 	}
 	else
 		ret = -1;

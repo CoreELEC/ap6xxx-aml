@@ -94,8 +94,8 @@ struct wl_ibss;
 #if defined(WL_SAE) && (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0))
 #error "Can not support WL_SAE befor kernel 3.14"
 #endif
-#if defined(WL_CLIENT_SAE) && (LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 0))
-#error "Can not support WL_CLIENT_SAE before kernel 4.9"
+#if defined(WL_CLIENT_SAE) && (LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0))
+#error "Can not support WL_CLIENT_SAE before kernel 3.10"
 #endif
 #if defined(WL_CLIENT_SAE) && defined(WL_SAE)
 #error "WL_SAE is for dongle-offload and WL_CLIENT_SAE is for wpa_supplicant. Please choose one."
@@ -425,19 +425,19 @@ extern char *dhd_dbg_get_system_timestamp(void);
 #define CFG80211_TRACE_TEXT		USER_PREFIX_CFG80211
 #define CFG80211_DEBUG_TEXT		USER_PREFIX_CFG80211
 #else
-#define CFG80211_INFO_TEXT		"[dhd] CFG80211-INFO) "
+#define CFG80211_INFO_TEXT		DHD_LOG_PREFIXS "CFG80211-INFO) "
 /* Samsung want to print INFO2 instead of ERROR
  * because most of case, ERROR message is not a real ERROR.
  * but it can be regarded as real error case for Tester
  */
 #ifdef CUSTOMER_HW4_DEBUG
-#define CFG80211_ERROR_TEXT		"[dhd] CFG80211-INFO2) "
+#define CFG80211_ERROR_TEXT		DHD_LOG_PREFIXS "CFG80211-INFO2) "
 #else
-#define CFG80211_ERROR_TEXT		"[dhd] CFG80211-ERROR) "
+#define CFG80211_ERROR_TEXT		DHD_LOG_PREFIXS "CFG80211-ERROR) "
 #endif /* CUSTOMER_HW4_DEBUG */
-#define CFG80211_SCAN_TEXT		"[dhd] CFG80211-SCAN) "
-#define CFG80211_TRACE_TEXT		"[dhd] CFG80211-TRACE) "
-#define CFG80211_DEBUG_TEXT		"[dhd] CFG80211-DEBUG) "
+#define CFG80211_SCAN_TEXT		DHD_LOG_PREFIXS "CFG80211-SCAN) "
+#define CFG80211_TRACE_TEXT		DHD_LOG_PREFIXS "CFG80211-TRACE) "
+#define CFG80211_DEBUG_TEXT		DHD_LOG_PREFIXS "CFG80211-DEBUG) "
 #endif /* defined(CUSTOMER_DBG_PREFIX_ENABLE) */
 
 #ifdef DHD_DEBUG
@@ -730,7 +730,9 @@ do {									\
 /* TODO: even in upstream linux(v5.0), FT-1X-SHA384 isn't defined and supported yet.
  * need to revisit here to sync correct name later.
  */
+#ifndef WLAN_AKM_SUITE_FT_8021X_SHA384
 #define WLAN_AKM_SUITE_FT_8021X_SHA384		0x000FAC0D
+#endif /* WLAN_AKM_SUITE_FT_8021X_SHA384 */
 
 #define WL_AKM_SUITE_SHA256_1X  0x000FAC05
 #define WL_AKM_SUITE_SHA256_PSK 0x000FAC06

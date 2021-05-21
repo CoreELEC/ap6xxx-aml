@@ -245,6 +245,10 @@ static int dhd_wait_for_file_dump(dhd_pub_t *dhdp);
 #define DHD_MAX_STA     32
 #endif /* BCM_ROUTER_DHD */
 
+#ifdef CUSTOMER_HW_AMLOGIC
+#include <linux/amlogic/wifi_dt.h>
+#endif
+
 #if (defined(BCM_ROUTER_DHD) && defined(HNDCTF))
 #include <ctf/hndctf.h>
 
@@ -257,10 +261,6 @@ static int dhd_wait_for_file_dump(dhd_pub_t *dhdp);
 #ifdef BCMDBG
 #include <dhd_macdbg.h>
 #endif /* BCMDBG */
-
-#ifdef CUSTOMER_HW_AMLOGIC
-#include <linux/amlogic/wifi_dt.h>
-#endif
 
 #ifdef DHD_EVENT_LOG_FILTER
 #include <dhd_event_log_filter.h>
@@ -1261,6 +1261,43 @@ struct dhd_if * dhd_get_ifp(dhd_pub_t *dhdp, uint32 ifidx)
 
 	return dhdp->info->iflist[ifidx];
 }
+
+#ifdef WLEASYMESH
+int
+dhd_set_1905_almac(dhd_pub_t *dhdp, uint8 ifidx, uint8* ea, bool mcast)
+{
+	dhd_if_t *ifp;
+
+	ASSERT(ea != NULL);
+	ifp = dhd_get_ifp(dhdp, ifidx);
+	if (ifp == NULL) {
+		return BCME_ERROR;
+	}
+	if (mcast) {
+		memcpy(ifp->_1905_al_mcast, ea, ETHER_ADDR_LEN);
+	} else {
+		memcpy(ifp->_1905_al_ucast, ea, ETHER_ADDR_LEN);
+	}
+	return BCME_OK;
+}
+int
+dhd_get_1905_almac(dhd_pub_t *dhdp, uint8 ifidx, uint8* ea, bool mcast)
+{
+	dhd_if_t *ifp;
+
+	ASSERT(ea != NULL);
+	ifp = dhd_get_ifp(dhdp, ifidx);
+	if (ifp == NULL) {
+		return BCME_ERROR;
+	}
+	if (mcast) {
+		memcpy(ea, ifp->_1905_al_mcast, ETHER_ADDR_LEN);
+	} else {
+		memcpy(ea, ifp->_1905_al_ucast, ETHER_ADDR_LEN);
+	}
+	return BCME_OK;
+}
+#endif /* WLEASYMESH */
 
 #ifdef PCIE_FULL_DONGLE
 
@@ -3015,6 +3052,7 @@ _dhd_set_mac_address(dhd_info_t *dhd, int ifidx, uint8 *addr, bool skip_stop)
 		memcpy(dhd->iflist[ifidx]->net->dev_addr, addr, ETHER_ADDR_LEN);
 		if (ifidx == 0)
 			memcpy(dhd->pub.mac.octet, addr, ETHER_ADDR_LEN);
+		WL_MSG(dhd_ifname(&dhd->pub, ifidx), "MACID %pM is overwritten\n", addr);
 	}
 
 exit:
@@ -3254,9 +3292,9 @@ dhd_ifadd_event_handler(void *handle, void *event_info, u8 event)
 			mac_addr = NULL;
 		}
 
-#if defined(WLDWDS) && defined(FOURADDR_AUTO_BRG)
+#ifdef WLEASYMESH
 		if ((ndev = wl_cfg80211_post_ifcreate(dhd->pub.info->iflist[0]->net,
-			&info, mac_addr, NULL, true)) == NULL)
+			&info, mac_addr, if_event->name, true)) == NULL)
 #else
 		if (wl_cfg80211_post_ifcreate(dhd->pub.info->iflist[0]->net,
 			&info, mac_addr, NULL, true) == NULL)
@@ -3311,7 +3349,9 @@ done:
 
 	MFREE(dhd->pub.osh, if_event, sizeof(dhd_if_event_t));
 #if defined(WLDWDS) && defined(FOURADDR_AUTO_BRG)
-	dhd_bridge_dev_set(dhd, ifidx, ndev);
+	if (dhd->pub.info->iflist[ifidx]) {
+		dhd_bridge_dev_set(dhd, ifidx, ndev);
+    }
 #endif /* defiend(WLDWDS) && defined(FOURADDR_AUTO_BRG) */
 
 	DHD_OS_WAKE_UNLOCK(&dhd->pub);
@@ -3346,7 +3386,9 @@ dhd_ifdel_event_handler(void *handle, void *event_info, u8 event)
 	ifidx = if_event->event.ifidx;
 	DHD_TRACE(("Removing interface with idx %d\n", ifidx));
 #if defined(WLDWDS) && defined(FOURADDR_AUTO_BRG)
-	dhd_bridge_dev_set(dhd, ifidx, NULL);
+	if (dhd->pub.info->iflist[ifidx]) {
+		dhd_bridge_dev_set(dhd, ifidx, NULL);
+    }
 #endif /* defiend(WLDWDS) && defined(FOURADDR_AUTO_BRG) */
 
 	if (!dhd->pub.info->iflist[ifidx]) {
@@ -3496,7 +3538,7 @@ dhd_set_mac_addr_handler(void *handle, void *event_info, u8 event)
 #endif /* DHD_NOTIFY_MAC_CHANGED */
 
 	if (_dhd_set_mac_address(dhd, ifp->idx, ifp->mac_addr, TRUE) == 0)
-		WL_MSG(dhd_ifname(&dhd->pub, ifp->idx), "MACID is overwritten\n");
+		DHD_INFO(("%s: MACID is overwritten\n",	__FUNCTION__));
 	else
 		DHD_ERROR(("%s: _dhd_set_mac_address() failed\n", __FUNCTION__));
 
@@ -3583,8 +3625,8 @@ dhd_set_mac_address(struct net_device *dev, void *addr)
 	dhdif->set_macaddress = TRUE;
 	dhd_net_if_unlock_local(dhd);
 
-	WL_MSG(dev->name, "iftype = %d macaddr = "MACDBG"\n",
-		dev->ieee80211_ptr->iftype, MAC2STRDBG(&dhdif->mac_addr));
+	WL_MSG(dev->name, "iftype = %d macaddr = %pM\n",
+		dev->ieee80211_ptr->iftype, dhdif->mac_addr);
 #ifdef WL_CFG80211
 	/* Check wdev->iftype for the role */
 	if (wl_cfg80211_macaddr_sync_reqd(dev)) {
@@ -4329,7 +4371,7 @@ BCMFASTPATH(dhd_start_xmit)(struct sk_buff *skb, struct net_device *net)
 
 #ifdef HOST_TPUT_TEST
 	dhd_os_sdlock_txq(&dhd->pub);
-	dhd->pub.net_len += datalen;
+	dhd->pub.conf->net_len += datalen;
 	dhd_os_sdunlock_txq(&dhd->pub);
 	if ((dhd->pub.conf->data_drop_mode == XMIT_DROP) &&
 			(PKTLEN(dhd->pub.osh, skb) > 500)) {
@@ -5593,12 +5635,21 @@ dhd_check_shinfo_nrfrags(dhd_pub_t *dhdp, void *pktbuf,
 	shinfo = skb_shinfo(skb);
 
 	if (shinfo->nr_frags) {
+#ifdef CONFIG_64BIT
 		DHD_ERROR(("!!Invalid nr_frags: %u pa.loaddr: 0x%llx pa.hiaddr: 0x%llx "
 			"skb: 0x%llx skb_data: 0x%llx skb_head: 0x%llx skb_tail: 0x%llx "
 			"skb_end: 0x%llx skb_len: %u shinfo: 0x%llx pktid: %u\n",
 			shinfo->nr_frags, (uint64)(pa->loaddr), (uint64)(pa->hiaddr),
 			(uint64)skb, (uint64)(skb->data), (uint64)(skb->head), (uint64)(skb->tail),
 			(uint64)(skb->end), skb->len, (uint64)shinfo, pktid));
+#else
+		DHD_ERROR(("!!Invalid nr_frags: %u pa:0x%lx "
+			"skb: 0x%llx skb_data: 0x%llx skb_head: 0x%llx skb_tail: 0x%llx "
+			"skb_end: 0x%llx skb_len: %u shinfo: 0x%llx pktid: %u\n",
+			shinfo->nr_frags, (unsigned long)pa,
+			(uint64)skb, (uint64)(skb->data), (uint64)(skb->head), (uint64)(skb->tail),
+			(uint64)(skb->end), skb->len, (uint64)shinfo, pktid));
+#endif
 		prhex("shinfo", (char*)shinfo, sizeof(struct skb_shared_info));
 		if (!dhd_query_bus_erros(dhdp)) {
 #ifdef DHD_FW_COREDUMP
@@ -5661,6 +5712,11 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan)
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
 	BCM_REFERENCE(dump_data);
 	BCM_REFERENCE(pkt_wake);
+
+#ifdef DHD_TPUT_PATCH
+	if (dhdp->conf->pktsetsum)
+		PKTSETSUMGOOD(pktbuf, TRUE);
+#endif
 
 #ifdef ENABLE_DHD_GRO
 	if (ifidx < DHD_MAX_IFS) {
@@ -6028,6 +6084,25 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan)
 				continue;
 		}
 #endif /* DHD_POST_EAPOL_M1_AFTER_ROAM_EVT */
+#ifdef WLEASYMESH
+		if ((dhdp->conf->fw_type == FW_TYPE_EZMESH) &&
+				(ntoh16(eh->ether_type) != ETHER_TYPE_BRCM)) {
+			uint16 * da = (uint16 *)(eh->ether_dhost);
+			ASSERT(ISALIGNED(da, 2));
+
+			/* XXX: Special handling for 1905 messages
+			 * if DA matches with configured 1905 AL MAC addresses
+			 * bypass fwder and foward it to linux stack
+			 */
+			if (ntoh16(eh->ether_type) == ETHER_TYPE_1905_1) {
+				if (!eacmp(da, ifp->_1905_al_ucast) || !eacmp(da, ifp->_1905_al_mcast)) {
+					//skb->fwr_flood = 0;
+				} else {
+					//skb->fwr_flood = 1;
+				}
+			}
+		}
+#endif /* WLEASYMESH */
 		/* Get the protocol, maintain skb around eth_type_trans()
 		 * The main reason for this hack is for the limitation of
 		 * Linux 2.4 where 'eth_type_trans' uses the 'net->hard_header_len'
@@ -6848,6 +6923,14 @@ dhd_dpc_thread(void *data)
 			printf("%s: set dpc_cpucore %d\n", __FUNCTION__, dhd->pub.conf->dpc_cpucore);
 			set_cpus_allowed_ptr(current, cpumask_of(dhd->pub.conf->dpc_cpucore));
 			dhd->pub.conf->dpc_cpucore = -1;
+		}
+		if (dhd->pub.conf->dhd_dpc_prio >= 0) {
+			struct sched_param param;
+			printf("%s: set dhd_dpc_prio %d\n", __FUNCTION__, dhd->pub.conf->dhd_dpc_prio);
+			param.sched_priority = (dhd->pub.conf->dhd_dpc_prio < MAX_RT_PRIO)?
+				dhd->pub.conf->dhd_dpc_prio:(MAX_RT_PRIO-1);
+			setScheduler(current, SCHED_FIFO, &param);
+			dhd->pub.conf->dhd_dpc_prio = -1;
 		}
 		if (!binary_sema_down(tsk)) {
 #ifdef ENABLE_ADAPTIVE_SCHED
@@ -8411,12 +8494,10 @@ dhd_ioctl_entry(struct net_device *net, struct ifreq *ifr, int cmd)
 		}
 	}
 
-#ifndef CONFIG_VTS_SUPPORT
 	if (!capable(CAP_NET_ADMIN)) {
 		bcmerror = BCME_EPERM;
 		goto done;
 	}
-#endif
 
 	/* Take backup of ioc.buf and restore later */
 	ioc_buf_user = ioc.buf;
@@ -9036,6 +9117,7 @@ dhd_open(struct net_device *net)
 #if defined(WL_EXT_IAPSTA) && defined(ISAM_PREINIT)
 	int bytes_written = 0;
 #endif
+	int retry = POWERUP_MAX_RETRY;
 
 #if defined(PREVENT_REOPEN_DURING_HANG)
 	/* WAR : to prevent calling dhd_open abnormally in quick succession after hang event */
@@ -9086,6 +9168,7 @@ dhd_open(struct net_device *net)
 	}
 
 	WL_MSG(net->name, "Enter\n");
+	DHD_ERROR(("\n%s\n", dhd_version));
 	DHD_MUTEX_LOCK();
 	/* Init wakelock */
 	if (!dhd_download_fw_on_driverload) {
@@ -9173,7 +9256,6 @@ dhd_open(struct net_device *net)
 	if (ifidx == 0) {
 		atomic_set(&dhd->pend_8021x_cnt, 0);
 		if (!dhd_download_fw_on_driverload) {
-			DHD_ERROR(("%s\n", dhd_version));
 			DHD_STATLOG_CTRL(&dhd->pub, ST(WLAN_POWER_ON), ifidx, 0);
 #if defined(WL_EXT_IAPSTA) || defined(USE_IW) || defined(WL_ESCAN)
 			wl_ext_event_attach_netdev(net, ifidx, dhd->iflist[ifidx]->bssidx);
@@ -9211,7 +9293,16 @@ dhd_open(struct net_device *net)
 			ret = dhd_bus_get(&dhd->pub, WLAN_MODULE);
 			wl_android_set_wifi_on_flag(TRUE);
 #else
-			ret = wl_android_wifi_on(net);
+			do {
+				dhd->pub.hang_reason = 0;
+				ret = wl_android_wifi_on(net);
+				if (!dhd->pub.hang_reason) {
+					break;
+				}
+				DHD_ERROR(("%s: hang_reason=%d, retry %d\n",
+					__FUNCTION__, dhd->pub.hang_reason, retry));
+				wl_android_wifi_off(net, TRUE);
+			} while (retry-- > 0);
 #endif /* BT_OVER_SDIO */
 #endif /* WLAN_ACCEL_BOOT */
 			if (ret != 0) {
@@ -9465,6 +9556,15 @@ dhd_pri_open(struct net_device *net)
 	/* Allow transmit calls */
 	dhd_tx_start_queues(net);
 	WL_MSG(net->name, "tx queue started\n");
+
+#if defined(SET_RPS_CPUS)
+	dhd_rps_cpus_enable(net, TRUE);
+#endif
+
+#if defined(SET_XPS_CPUS)
+	dhd_xps_cpus_enable(net, TRUE);
+#endif
+
 	return ret;
 }
 
@@ -9511,6 +9611,9 @@ dhd_static_if_open(struct net_device *net)
 	s32 ret = 0;
 	struct bcm_cfg80211 *cfg;
 	struct net_device *primary_netdev = NULL;
+#ifdef WLEASYMESH
+	dhd_info_t *dhd = DHD_DEV_INFO(net);
+#endif /* WLEASYMESH */
 
 	cfg = wl_get_cfg(net);
 	primary_netdev = bcmcfg_to_prmry_ndev(cfg);
@@ -9525,6 +9628,16 @@ dhd_static_if_open(struct net_device *net)
 	/* Ensure fw is initialized. If it is already initialized,
 	 * dhd_open will return success.
 	 */
+#ifdef WLEASYMESH
+	WL_MSG(net->name, "switch to EasyMesh fw\n");
+	dhd->pub.conf->fw_type = FW_TYPE_EZMESH;
+	ret = dhd_stop(primary_netdev);
+	if (unlikely(ret)) {
+		printf("===>%s, Failed to close primary dev ret %d\n", __FUNCTION__, ret);
+		goto done;
+	}
+	OSL_SLEEP(1);
+#endif /* WLEASYMESH */
 	ret = dhd_open(primary_netdev);
 	if (unlikely(ret)) {
 		DHD_ERROR(("Failed to open primary dev ret %d\n", ret));
@@ -9577,6 +9690,12 @@ dhd_static_if_stop(struct net_device *net)
 	* context.
 	*/
 	primary_netdev = bcmcfg_to_prmry_ndev(cfg);
+#ifdef WLEASYMESH
+	if (dhd->pub.conf->fw_type == FW_TYPE_EZMESH) {
+		WL_MSG(net->name, "switch to STA fw\n");
+		dhd->pub.conf->fw_type = FW_TYPE_STA;
+	} else
+#endif /* WLEASYMESH */
 	if (!(primary_netdev->flags & IFF_UP)) {
 		ret = dhd_stop(primary_netdev);
 	} else {
@@ -10243,6 +10362,9 @@ dhd_remove_if(dhd_pub_t *dhdpub, int ifidx, bool need_rtnl_lock)
 			} else {
 				netif_tx_disable(ifp->net);
 
+#if defined(SET_RPS_CPUS)
+				custom_rps_map_clear(ifp->net->_rx);
+#endif /* SET_RPS_CPUS */
 #if (defined(BCM_ROUTER_DHD) && defined(HNDCTF))
 				if (dhdinfo->cih)
 					ctf_dev_unregister(dhdinfo->cih, ifp->net);
@@ -10407,7 +10529,9 @@ dhd_init_logstrs_array(osl_t *osh, dhd_event_log_t *temp)
 {
 	struct file *filep = NULL;
 	struct kstat stat;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	mm_segment_t fs;
+#endif
 	char *raw_fmts =  NULL;
 	int logstrs_size = 0;
 	int error = 0;
@@ -10417,8 +10541,10 @@ dhd_init_logstrs_array(osl_t *osh, dhd_event_log_t *temp)
 		return BCME_ERROR;
 	}
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	fs = get_fs();
 	set_fs(KERNEL_DS);
+#endif
 
 	filep = filp_open(logstrs_path, O_RDONLY, 0);
 
@@ -10456,7 +10582,9 @@ dhd_init_logstrs_array(osl_t *osh, dhd_event_log_t *temp)
 	if (dhd_parse_logstrs_file(osh, raw_fmts, logstrs_size, temp)
 				== BCME_OK) {
 		filp_close(filep, NULL);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 		set_fs(fs);
+#endif
 		return BCME_OK;
 	}
 
@@ -10472,7 +10600,9 @@ fail1:
 	if (!IS_ERR(filep))
 		filp_close(filep, NULL);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	set_fs(fs);
+#endif
 	temp->fmts = NULL;
 	temp->raw_fmts = NULL;
 
@@ -10484,7 +10614,9 @@ dhd_read_map(osl_t *osh, char *fname, uint32 *ramstart, uint32 *rodata_start,
 		uint32 *rodata_end)
 {
 	struct file *filep = NULL;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	mm_segment_t fs;
+#endif
 	int err = BCME_ERROR;
 
 	if (fname == NULL) {
@@ -10492,8 +10624,10 @@ dhd_read_map(osl_t *osh, char *fname, uint32 *ramstart, uint32 *rodata_start,
 		return BCME_ERROR;
 	}
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	fs = get_fs();
 	set_fs(KERNEL_DS);
+#endif
 
 	filep = filp_open(fname, O_RDONLY, 0);
 	if (IS_ERR(filep)) {
@@ -10509,7 +10643,9 @@ fail:
 	if (!IS_ERR(filep))
 		filp_close(filep, NULL);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	set_fs(fs);
+#endif
 
 	return err;
 }
@@ -10524,7 +10660,9 @@ dhd_lookup_map(osl_t *osh, char *fname, uint32 pc, char *pc_fn,
 		uint32 lr, char *lr_fn)
 {
 	struct file *filep = NULL;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	mm_segment_t fs;
+#endif
 	char *raw_fmts = NULL, *raw_fmts_loc = NULL, *cptr = NULL;
 	uint32 read_size = READ_NUM_BYTES;
 	int err = BCME_ERROR;
@@ -10551,8 +10689,10 @@ dhd_lookup_map(osl_t *osh, char *fname, uint32 pc, char *pc_fn,
 		return BCME_ERROR;
 	}
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	fs = get_fs();
 	set_fs(KERNEL_DS);
+#endif
 
 	filep = filp_open(fname, O_RDONLY, 0);
 	if (IS_ERR(filep)) {
@@ -10690,7 +10830,9 @@ fail:
 	if (!IS_ERR(filep))
 		filp_close(filep, NULL);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	set_fs(fs);
+#endif
 
 	if (!(count & PC_FOUND_BIT)) {
 		sprintf(pc_fn, "0x%08x", pc);
@@ -10706,7 +10848,9 @@ static int
 dhd_init_static_strs_array(osl_t *osh, dhd_event_log_t *temp, char *str_file, char *map_file)
 {
 	struct file *filep = NULL;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	mm_segment_t fs;
+#endif
 	char *raw_fmts =  NULL;
 	uint32 logstrs_size = 0;
 	int error = 0;
@@ -10729,8 +10873,10 @@ dhd_init_static_strs_array(osl_t *osh, dhd_event_log_t *temp, char *str_file, ch
 	DHD_ERROR(("ramstart: 0x%x, rodata_start: 0x%x, rodata_end:0x%x\n",
 		ramstart, rodata_start, rodata_end));
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	fs = get_fs();
 	set_fs(KERNEL_DS);
+#endif
 
 	filep = filp_open(str_file, O_RDONLY, 0);
 	if (IS_ERR(filep)) {
@@ -10789,7 +10935,9 @@ dhd_init_static_strs_array(osl_t *osh, dhd_event_log_t *temp, char *str_file, ch
 	}
 
 	filp_close(filep, NULL);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	set_fs(fs);
+#endif
 
 	return BCME_OK;
 
@@ -10802,7 +10950,9 @@ fail1:
 	if (!IS_ERR(filep))
 		filp_close(filep, NULL);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	set_fs(fs);
+#endif
 
 	if (strstr(str_file, ram_file_str) != NULL) {
 		temp->raw_sstr = NULL;
@@ -10953,9 +11103,6 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen
 #elif defined(BCMDBUS)
 	wifi_adapter_info_t *adapter = data;
 #endif
-#ifdef GET_CUSTOM_MAC_ENABLE
-	char hw_ether[62];
-#endif /* GET_CUSTOM_MAC_ENABLE */
 
 	dhd_attach_states_t dhd_state = DHD_ATTACH_STATE_INIT;
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
@@ -10966,10 +11113,8 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen
 #endif /* PCIE_FULL_DONGLE */
 
 	/* will implement get_ids for DBUS later */
-#if defined(BCMSDIO)
-	dhd_bus_get_ids(bus, &bus_type, &bus_num, &slot_num);
-#endif
 #if defined(BCMSDIO) || defined(BCMPCIE)
+	dhd_bus_get_ids(bus, &bus_type, &bus_num, &slot_num);
 	adapter = dhd_wifi_platform_get_adapter(bus_type, bus_num, slot_num);
 #endif
 
@@ -11007,10 +11152,6 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen
 	dll_init(&(dhd->pub.mw_list_head));
 #endif /* DHD_DEBUG */
 
-#ifdef GET_CUSTOM_MAC_ENABLE
-	wifi_platform_get_mac_addr(dhd->adapter, hw_ether, iface_name);
-	bcopy(hw_ether, dhd->pub.mac.octet, sizeof(struct ether_addr));
-#endif /* GET_CUSTOM_MAC_ENABLE */
 #ifdef CUSTOM_FORCE_NODFS_FLAG
 	dhd->pub.dhd_cflags |= WLAN_PLAT_NODFS_FLAG;
 	dhd->pub.force_country_change = TRUE;
@@ -11229,6 +11370,12 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen
 	}
 #endif /* WL_EXT_IAPSTA */
 #endif /* WL_EXT_IAPSTA || USE_IW || WL_ESCAN */
+#ifdef WL_EXT_GENL
+	if (wl_ext_genl_init(net)) {
+		DHD_ERROR(("wl_ext_genl_init failed\n"));
+		goto fail;
+	}
+#endif
 #if defined(WL_WIRELESS_EXT)
 	/* Attach and link in the iw */
 	if (wl_iw_attach(net, &dhd->pub) != 0) {
@@ -15892,10 +16039,12 @@ int dhd_change_mtu(dhd_pub_t *dhdp, int new_mtu, int ifidx)
 	dev = dhd->iflist[ifidx]->net;
 	ASSERT(dev);
 
+#ifndef DHD_TPUT_PATCH
 	if (netif_running(dev)) {
 		DHD_ERROR(("%s: Must be down to change its MTU\n", dev->name));
 		return BCME_NOTDOWN;
 	}
+#endif
 
 #define DHD_MIN_MTU 1500
 #define DHD_MAX_MTU 1752
@@ -16298,7 +16447,25 @@ int
 dhd_attach_net(dhd_pub_t *dhdp, bool need_rtnl_lock)
 {
 	struct net_device *primary_ndev;
+#ifdef GET_CUSTOM_MAC_ENABLE
+	char hw_ether[62];
+#endif /* GET_CUSTOM_MAC_ENABLE */
+#if defined(GET_CUSTOM_MAC_ENABLE) || defined(GET_OTP_MAC_ENABLE)
+	int ret = BCME_ERROR;
+#endif /* GET_CUSTOM_MAC_ENABLE || GET_OTP_MAC_ENABLE */
+
 	BCM_REFERENCE(primary_ndev);
+
+#ifdef GET_CUSTOM_MAC_ENABLE
+	ret = wifi_platform_get_mac_addr(dhdp->adapter, hw_ether, iface_name);
+	if (!ret)
+		bcopy(hw_ether, dhdp->mac.octet, ETHER_ADDR_LEN);
+#endif /* GET_CUSTOM_MAC_ENABLE */
+
+#ifdef GET_OTP_MAC_ENABLE
+	if (ret && memcmp(&ether_null, &dhdp->conf->otp_mac, ETHER_ADDR_LEN))
+		bcopy(&dhdp->conf->otp_mac, &dhdp->mac, ETHER_ADDR_LEN);
+#endif /* GET_OTP_MAC_ENABLE */
 
 	/* Register primary net device */
 	if (dhd_register_if(dhdp, 0, need_rtnl_lock) != 0) {
@@ -16721,6 +16888,9 @@ void dhd_detach(dhd_pub_t *dhdp)
 		wl_iw_detach(dev, dhdp);
 	}
 #endif /* defined(WL_WIRELESS_EXT) */
+#ifdef WL_EXT_GENL
+	wl_ext_genl_deinit(dev);
+#endif
 #if defined(WL_EXT_IAPSTA) || defined(USE_IW) || defined(WL_ESCAN)
 #ifdef WL_EXT_IAPSTA
 	wl_ext_iapsta_dettach(dhdp);
@@ -16760,6 +16930,9 @@ void dhd_detach(dhd_pub_t *dhdp)
 			if (ifp->net->reg_state == NETREG_UNINITIALIZED) {
 				free_netdev(ifp->net);
 			} else {
+#ifdef SET_RPS_CPUS
+				custom_rps_map_clear(ifp->net->_rx);
+#endif /* SET_RPS_CPUS */
 				netif_tx_disable(ifp->net);
 				unregister_netdev(ifp->net);
 			}
@@ -20257,12 +20430,16 @@ int write_file(const char * file_name, uint32 flags, uint8 *buf, int size)
 {
 	int ret = 0;
 	struct file *fp = NULL;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	mm_segment_t old_fs;
+#endif
 	loff_t pos = 0;
 
 	/* change to KERNEL_DS address limit */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
+#endif
 
 	/* open file to write */
 	fp = filp_open(file_name, flags, 0664);
@@ -20292,7 +20469,9 @@ exit:
 		filp_close(fp, current->files);
 
 	/* restore previous address limit */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	set_fs(old_fs);
+#endif
 
 	return ret;
 }
@@ -22244,7 +22423,10 @@ dhd_mem_dump(void *handle, void *event_info, u8 event)
 		cancel_delayed_work_sync(&dhd->edl_dispatcher_work);
 #endif
 
-		BUG_ON(1);
+		printf("%s\n", info_string);
+		printf("MAC %pM\n", &dhdp->mac);
+		DHD_ERROR(("%s: call BUG_ON \n", __FUNCTION__));
+//		BUG_ON(1);
 	}
 
 exit:
@@ -23803,7 +23985,9 @@ do_dhd_log_dump(dhd_pub_t *dhdp, log_dump_type_t *type)
 {
 	int ret = 0, i = 0;
 	struct file *fp = NULL;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	mm_segment_t old_fs;
+#endif
 	loff_t pos = 0;
 	char dump_path[128];
 	uint32 file_mode;
@@ -23830,8 +24014,10 @@ do_dhd_log_dump(dhd_pub_t *dhdp, log_dump_type_t *type)
 		goto exit1;
 	}
 	/* change to KERNEL_DS address limit */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
+#endif
 
 	dhd_get_debug_dump_file_name(NULL, dhdp, dump_path, sizeof(dump_path));
 
@@ -24042,7 +24228,9 @@ exit2:
 		DHD_ERROR(("%s: Finished writing log dump to file - '%s' \n",
 				__FUNCTION__, dump_path));
 	}
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	set_fs(old_fs);
+#endif
 exit1:
 	if (type) {
 		MFREE(dhdp->osh, type, sizeof(*type));
@@ -24762,6 +24950,244 @@ int dhd_set_block_tdls_status(dhd_pub_t *dhdp, uint32 idx, int val)
 	return BCME_OK;
 }
 #endif /* DHD_L2_FILTER */
+
+#if defined(SET_XPS_CPUS)
+int dhd_xps_cpus_enable(struct net_device *net, int enable)
+{
+	dhd_info_t *dhd = DHD_DEV_INFO(net);
+	dhd_if_t *ifp;
+	int ifidx;
+	char * XPS_CPU_SETBUF;
+
+	ifidx = dhd_net2idx(dhd, net);
+	if (ifidx == DHD_BAD_IF) {
+		DHD_ERROR(("%s bad ifidx\n", __FUNCTION__));
+		return -ENODEV;
+	}
+
+	if (!dhd->pub.conf->xps_cpus)
+		return -ENODEV;
+
+	if (ifidx == PRIMARY_INF) {
+		if (dhd->pub.op_mode == DHD_FLAG_IBSS_MODE) {
+			DHD_INFO(("%s : set for IBSS.\n", __FUNCTION__));
+			XPS_CPU_SETBUF = RPS_CPUS_MASK_IBSS;
+		} else {
+			DHD_INFO(("%s : set for BSS.\n", __FUNCTION__));
+			XPS_CPU_SETBUF = RPS_CPUS_MASK;
+		}
+	} else if (ifidx == VIRTUAL_INF) {
+		DHD_INFO(("%s : set for P2P.\n", __FUNCTION__));
+		XPS_CPU_SETBUF = RPS_CPUS_MASK_P2P;
+	} else {
+		DHD_ERROR(("%s : Invalid index : %d.\n", __FUNCTION__, ifidx));
+		return -EINVAL;
+	}
+
+	ifp = dhd->iflist[ifidx];
+	if (ifp) {
+		if (enable) {
+			DHD_INFO(("%s : set xps_cpus as [%s]\n", __FUNCTION__, XPS_CPU_SETBUF));
+			custom_xps_map_set(ifp->net, XPS_CPU_SETBUF, strlen(XPS_CPU_SETBUF));
+		} else {
+			custom_xps_map_clear(ifp->net);
+		}
+	} else {
+		DHD_ERROR(("%s : ifp is NULL!!\n", __FUNCTION__));
+		return -ENODEV;
+	}
+	return BCME_OK;
+}
+
+int custom_xps_map_set(struct net_device *net, char *buf, size_t len)
+{
+	cpumask_var_t mask;
+	int err;
+
+	DHD_INFO(("%s : Entered.\n", __FUNCTION__));
+
+	if (!alloc_cpumask_var(&mask, GFP_KERNEL)) {
+		DHD_ERROR(("%s : alloc_cpumask_var fail.\n", __FUNCTION__));
+		return -ENOMEM;
+	}
+
+	err = bitmap_parse(buf, len, cpumask_bits(mask), nr_cpumask_bits);
+	if (err) {
+		free_cpumask_var(mask);
+		DHD_ERROR(("%s : bitmap_parse fail.\n", __FUNCTION__));
+		return err;
+	}
+
+	err = netif_set_xps_queue(net, mask, 0);
+
+	free_cpumask_var(mask);
+
+	if (0 == err)
+		WL_MSG(net->name, "Done. mapping cpu\n");
+
+	return err;
+}
+
+void custom_xps_map_clear(struct net_device *net)
+{
+    struct xps_dev_maps *dev_maps;
+
+	DHD_INFO(("%s : Entered.\n", __FUNCTION__));
+
+    rcu_read_lock();
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0))
+	dev_maps = rcu_dereference(net->xps_cpus_map);
+#else
+    dev_maps = rcu_dereference(net->xps_maps);
+#endif
+    rcu_read_unlock();
+
+	if (dev_maps) {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0))
+		RCU_INIT_POINTER(net->xps_cpus_map, NULL);
+#else
+		RCU_INIT_POINTER(net->xps_maps, NULL);
+#endif
+		kfree_rcu(dev_maps, rcu);
+		DHD_INFO(("%s : xps_cpus map clear.\n", __FUNCTION__));
+	}
+}
+#endif // endif
+
+#if defined(SET_RPS_CPUS)
+int dhd_rps_cpus_enable(struct net_device *net, int enable)
+{
+	dhd_info_t *dhd = DHD_DEV_INFO(net);
+	dhd_if_t *ifp;
+	int ifidx;
+	char * RPS_CPU_SETBUF;
+
+	ifidx = dhd_net2idx(dhd, net);
+	if (ifidx == DHD_BAD_IF) {
+		DHD_ERROR(("%s bad ifidx\n", __FUNCTION__));
+		return -ENODEV;
+	}
+
+	if (!dhd->pub.conf->rps_cpus)
+		return -ENODEV;
+
+	if (ifidx == PRIMARY_INF) {
+		if (dhd->pub.op_mode == DHD_FLAG_IBSS_MODE) {
+			DHD_INFO(("%s : set for IBSS.\n", __FUNCTION__));
+			RPS_CPU_SETBUF = RPS_CPUS_MASK_IBSS;
+		} else {
+			DHD_INFO(("%s : set for BSS.\n", __FUNCTION__));
+			RPS_CPU_SETBUF = RPS_CPUS_MASK;
+		}
+	} else if (ifidx == VIRTUAL_INF) {
+		DHD_INFO(("%s : set for P2P.\n", __FUNCTION__));
+		RPS_CPU_SETBUF = RPS_CPUS_MASK_P2P;
+	} else {
+		DHD_ERROR(("%s : Invalid index : %d.\n", __FUNCTION__, ifidx));
+		return -EINVAL;
+	}
+
+	ifp = dhd->iflist[ifidx];
+	if (ifp) {
+		if (enable) {
+			DHD_INFO(("%s : set rps_cpus as [%s]\n", __FUNCTION__, RPS_CPU_SETBUF));
+			custom_rps_map_set(ifp->net->_rx, RPS_CPU_SETBUF, strlen(RPS_CPU_SETBUF));
+		} else {
+			custom_rps_map_clear(ifp->net->_rx);
+		}
+	} else {
+		DHD_ERROR(("%s : ifp is NULL!!\n", __FUNCTION__));
+		return -ENODEV;
+	}
+	return BCME_OK;
+}
+
+int custom_rps_map_set(struct netdev_rx_queue *queue, char *buf, size_t len)
+{
+	struct rps_map *old_map, *map;
+	cpumask_var_t mask;
+	int err, cpu, i;
+	static DEFINE_SPINLOCK(rps_map_lock);
+
+	DHD_INFO(("%s : Entered.\n", __FUNCTION__));
+
+	if (!alloc_cpumask_var(&mask, GFP_KERNEL)) {
+		DHD_ERROR(("%s : alloc_cpumask_var fail.\n", __FUNCTION__));
+		return -ENOMEM;
+	}
+
+	err = bitmap_parse(buf, len, cpumask_bits(mask), nr_cpumask_bits);
+	if (err) {
+		free_cpumask_var(mask);
+		DHD_ERROR(("%s : bitmap_parse fail.\n", __FUNCTION__));
+		return err;
+	}
+
+	map = kzalloc(max_t(unsigned int,
+		RPS_MAP_SIZE(cpumask_weight(mask)), L1_CACHE_BYTES),
+		GFP_KERNEL);
+	if (!map) {
+		free_cpumask_var(mask);
+		DHD_ERROR(("%s : map malloc fail.\n", __FUNCTION__));
+		return -ENOMEM;
+	}
+
+	i = 0;
+	for_each_cpu(cpu, mask) {
+		map->cpus[i++] = cpu;
+	}
+
+	if (i) {
+		map->len = i;
+	} else {
+		kfree(map);
+		map = NULL;
+		free_cpumask_var(mask);
+		DHD_ERROR(("%s : mapping cpu fail.\n", __FUNCTION__));
+		return -1;
+	}
+
+	spin_lock(&rps_map_lock);
+	old_map = rcu_dereference_protected(queue->rps_map,
+		lockdep_is_held(&rps_map_lock));
+	rcu_assign_pointer(queue->rps_map, map);
+	spin_unlock(&rps_map_lock);
+
+	if (map) {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 2, 0))
+		static_key_slow_inc(&rps_needed.key);
+#else
+		static_key_slow_inc(&rps_needed);
+#endif
+	}
+	if (old_map) {
+		kfree_rcu(old_map, rcu);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 2, 0))
+		static_key_slow_dec(&rps_needed.key);
+#else
+		static_key_slow_dec(&rps_needed);
+#endif
+	}
+	free_cpumask_var(mask);
+
+	DHD_INFO(("%s : Done. mapping cpu nummber : %d\n", __FUNCTION__, map->len));
+	return map->len;
+}
+
+void custom_rps_map_clear(struct netdev_rx_queue *queue)
+{
+	struct rps_map *map;
+
+	DHD_INFO(("%s : Entered.\n", __FUNCTION__));
+
+	map = rcu_dereference_protected(queue->rps_map, 1);
+	if (map) {
+		RCU_INIT_POINTER(queue->rps_map, NULL);
+		kfree_rcu(map, rcu);
+		DHD_INFO(("%s : rps_cpus map clear.\n", __FUNCTION__));
+	}
+}
+#endif // endif
 
 #ifdef DHD_BUZZZ_LOG_ENABLED
 
@@ -25892,12 +26318,16 @@ int
 dhd_write_file(const char *filepath, char *buf, int buf_len)
 {
 	struct file *fp = NULL;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	mm_segment_t old_fs;
+#endif
 	int ret = 0;
 
 	/* change to KERNEL_DS address limit */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
+#endif
 
 	/* File is always created. */
 	fp = filp_open(filepath, O_RDWR | O_CREAT, 0664);
@@ -25920,7 +26350,9 @@ dhd_write_file(const char *filepath, char *buf, int buf_len)
 	}
 
 	/* restore previous address limit */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	set_fs(old_fs);
+#endif
 
 	return ret;
 }
@@ -25929,16 +26361,22 @@ int
 dhd_read_file(const char *filepath, char *buf, int buf_len)
 {
 	struct file *fp = NULL;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	mm_segment_t old_fs;
+#endif
 	int ret;
 
 	/* change to KERNEL_DS address limit */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
+#endif
 
 	fp = filp_open(filepath, O_RDONLY, 0);
 	if (IS_ERR(fp)) {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 		set_fs(old_fs);
+#endif
 		DHD_ERROR(("%s: File %s doesn't exist\n", __FUNCTION__, filepath));
 		return BCME_ERROR;
 	}
@@ -25947,7 +26385,9 @@ dhd_read_file(const char *filepath, char *buf, int buf_len)
 	filp_close(fp, NULL);
 
 	/* restore previous address limit */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	set_fs(old_fs);
+#endif
 
 	/* Return the number of bytes read */
 	if (ret > 0) {
@@ -28749,6 +29189,7 @@ dhd_ring_whole_unlock(void *_ring)
 #else
 #define DHD_VFS_UNLINK(dir, b, c) vfs_unlink(DHD_VFS_INODE(dir), b, c)
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0) */
+
 #if ((defined DHD_DUMP_MNGR) || (defined DNGL_AXI_ERROR_LOGGING))
 int
 dhd_file_delete(char *path)
@@ -28793,6 +29234,7 @@ dhd_file_delete(char *path)
 	return err;
 }
 #endif
+
 #ifdef DHD_DUMP_MNGR
 static int
 dhd_dump_file_manage_idx(dhd_dump_file_manage_t *fm_ptr, char *fname)

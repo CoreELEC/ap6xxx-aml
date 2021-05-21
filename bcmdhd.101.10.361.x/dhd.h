@@ -1942,14 +1942,12 @@ typedef struct dhd_pub {
 #ifdef SENDPROB
 	bool recv_probereq;
 #endif
-#ifdef HOST_TPUT_TEST
-	struct osl_timespec bus_ts;
-	struct osl_timespec net_ts;
-	uint32 net_len;
-#endif
 #ifdef DHD_NOTIFY_MAC_CHANGED
 	bool skip_dhd_stop;
 #endif /* DHD_NOTIFY_MAC_CHANGED */
+#ifdef WL_EXT_GENL
+	void *zconf;
+#endif
 } dhd_pub_t;
 
 #if defined(__linux__)
@@ -2145,6 +2143,11 @@ extern void dhd_os_wake_lock_destroy(struct dhd_info *dhd);
 extern void dhd_os_scan_wake_lock_timeout(dhd_pub_t *pub, int val);
 extern void dhd_os_scan_wake_unlock(dhd_pub_t *pub);
 #endif /* BCMPCIE_SCAN_WAKELOCK */
+
+#ifdef WLEASYMESH
+extern int dhd_get_1905_almac(dhd_pub_t *dhdp, uint8 ifidx, uint8* ea, bool mcast);
+extern int dhd_set_1905_almac(dhd_pub_t *dhdp, uint8 ifidx, uint8* ea, bool mcast);
+#endif /* WLEASYMESH */
 
 inline static void MUTEX_LOCK_SOFTAP_SET_INIT(dhd_pub_t * dhdp)
 {
@@ -3807,6 +3810,36 @@ extern void *dhd_pub_shim(dhd_pub_t *dhd_pub);
 #ifdef DHD_FW_COREDUMP
 void* dhd_get_fwdump_buf(dhd_pub_t *dhd_pub, uint32 length);
 #endif /* DHD_FW_COREDUMP */
+
+#if defined(SET_XPS_CPUS)
+int dhd_xps_cpus_enable(struct net_device *net, int enable);
+int custom_xps_map_set(struct net_device *net, char *buf, size_t len);
+void custom_xps_map_clear(struct net_device *net);
+#endif
+
+#if defined(SET_RPS_CPUS)
+int dhd_rps_cpus_enable(struct net_device *net, int enable);
+int custom_rps_map_set(struct netdev_rx_queue *queue, char *buf, size_t len);
+void custom_rps_map_clear(struct netdev_rx_queue *queue);
+#define PRIMARY_INF 0
+#define VIRTUAL_INF 1
+#if defined(CONFIG_MACH_UNIVERSAL7420) || defined(CONFIG_SOC_EXYNOS8890)
+#define RPS_CPUS_MASK "10"
+#define RPS_CPUS_MASK_P2P "10"
+#define RPS_CPUS_MASK_IBSS "10"
+#define RPS_CPUS_WLAN_CORE_ID 4
+#else
+#if defined(DHD_TPUT_PATCH)
+#define RPS_CPUS_MASK "f"
+#define RPS_CPUS_MASK_P2P "f"
+#define RPS_CPUS_MASK_IBSS "f"
+#else
+#define RPS_CPUS_MASK "6"
+#define RPS_CPUS_MASK_P2P "6"
+#define RPS_CPUS_MASK_IBSS "6"
+#endif
+#endif /* CONFIG_MACH_UNIVERSAL7420 || CONFIG_SOC_EXYNOS8890 */
+#endif // endif
 
 int dhd_get_download_buffer(dhd_pub_t	*dhd, char *file_path, download_type_t component,
 	char ** buffer, int *length);

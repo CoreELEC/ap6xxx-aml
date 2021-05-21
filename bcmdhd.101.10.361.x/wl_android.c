@@ -93,19 +93,19 @@ uint android_msg_level = ANDROID_ERROR_LEVEL | ANDROID_MSG_LEVEL;
 #define ANDROID_ERROR_MSG(x, args...) \
 	do { \
 		if (android_msg_level & ANDROID_ERROR_LEVEL) { \
-			printk(KERN_ERR "[dhd] ANDROID-ERROR) " x, ## args); \
+			printk(KERN_ERR DHD_LOG_PREFIXS "ANDROID-ERROR) " x, ## args); \
 		} \
 	} while (0)
 #define ANDROID_TRACE_MSG(x, args...) \
 	do { \
 		if (android_msg_level & ANDROID_TRACE_LEVEL) { \
-			printk(KERN_INFO "[dhd] ANDROID-TRACE) " x, ## args); \
+			printk(KERN_INFO DHD_LOG_PREFIXS "ANDROID-TRACE) " x, ## args); \
 		} \
 	} while (0)
 #define ANDROID_INFO_MSG(x, args...) \
 	do { \
 		if (android_msg_level & ANDROID_INFO_LEVEL) { \
-			printk(KERN_INFO "[dhd] ANDROID-INFO) " x, ## args); \
+			printk(KERN_INFO DHD_LOG_PREFIXS "ANDROID-INFO) " x, ## args); \
 		} \
 	} while (0)
 #define ANDROID_ERROR(x) ANDROID_ERROR_MSG x
@@ -13337,8 +13337,8 @@ wl_cfg80211_static_if_open(struct net_device *net)
 	u16 iftype = net->ieee80211_ptr ? net->ieee80211_ptr->iftype : 0;
 	u16 wl_iftype, wl_mode;
 #ifdef CUSTOM_MULTI_MAC
-	char hw_ether[62];
 	dhd_pub_t *dhd = dhd_get_pub(net);
+	char hw_ether[62];
 #endif
 
 	ANDROID_INFO(("[STATIC_IF] dev_open ndev %p and wdev %p\n", net, net->ieee80211_ptr));
@@ -13348,19 +13348,11 @@ wl_cfg80211_static_if_open(struct net_device *net)
 		return BCME_ERROR;
 	}
 	if (cfg->static_ndev_state != NDEV_STATE_FW_IF_CREATED) {
-#if defined(DHD_USE_RANDMAC) || defined(WL_SOFTAP_RAND)
+#ifdef CUSTOM_MULTI_MAC
+		if (!wifi_platform_get_mac_addr(dhd->info->adapter, hw_ether, net->name))
+			memcpy(net->dev_addr, hw_ether, ETHER_ADDR_LEN);
+#endif
 		wdev = wl_cfg80211_add_if(cfg, primary_ndev, wl_iftype, net->name, net->dev_addr);
-#else
-#if defined(CUSTOM_MULTI_MAC)
-		if (wifi_platform_get_mac_addr(dhd->info->adapter, hw_ether, net->name)) {
-#endif
-		wdev = wl_cfg80211_add_if(cfg, primary_ndev, wl_iftype, net->name, NULL);
-#if defined(CUSTOM_MULTI_MAC)
-		} else {
-			wdev = wl_cfg80211_add_if(cfg, primary_ndev, wl_iftype, net->name, hw_ether);
-		}
-#endif
-#endif /* DHD_USE_RANDMAC || WL_SOFTAP_RAND */
 		if (!wdev) {
 			ANDROID_ERROR(("[STATIC_IF] wdev is NULL, can't proceed"));
 			return BCME_ERROR;
