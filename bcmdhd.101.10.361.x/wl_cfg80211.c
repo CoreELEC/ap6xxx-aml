@@ -6102,7 +6102,9 @@ wl_sync_fw_assoc_states(struct bcm_cfg80211 *cfg,
 				wl_cfg80211_cleanup_mismatch_status(dev, cfg, true);
 			}
 		}
+#ifdef WL_EXT_IAPSTA
 		wl_ext_in4way_sync(dev, STA_WAIT_DISCONNECTED, WL_EXT_STATUS_CONNECTING, NULL);
+#endif
 	}
 
 	/* Clear BSSID if disconnecting state is not in progress */
@@ -6128,7 +6130,7 @@ wl_sync_fw_assoc_states(struct bcm_cfg80211 *cfg,
 void
 wl_pkt_mon_start(struct bcm_cfg80211 *cfg, struct net_device *dev)
 {
-	if ((dev == bcmcfg_to_prmry_ndev(cfg))) {
+	if (dev == bcmcfg_to_prmry_ndev(cfg)) {
 		dhd_pub_t *dhdp =  (dhd_pub_t *)(cfg->pub);
 		DHD_DBG_PKT_MON_START(dhdp);
 	}
@@ -6266,7 +6268,9 @@ wl_cfg80211_connect(struct wiphy *wiphy, struct net_device *dev,
 	s32 err = BCME_OK;
 	struct bcm_cfg80211 *cfg = wiphy_priv(wiphy);
 	wlcfg_assoc_info_t assoc_info;
+#ifdef WL_EXT_IAPSTA
 	dhd_pub_t *dhdp =  (dhd_pub_t *)(cfg->pub);
+#endif
 
 	WL_DBG(("Enter len=%zu\n", sme->ie_len));
 	RETURN_EIO_IF_NOT_UP(cfg);
@@ -6324,7 +6328,7 @@ wl_cfg80211_connect(struct wiphy *wiphy, struct net_device *dev,
 
 		/* print relevant info for debug purpose */
 #ifdef WL_EXT_IAPSTA
-		wl_ext_iapsta_update_channel(dhdp, dev, assoc_info.chan_cnt);
+		wl_ext_iapsta_update_channel(dhdp, dev, CHSPEC_CHANNEL(assoc_info.chanspecs[0]));
 #endif
 		wl_conn_debug_info(cfg, dev, &assoc_info);
 		if ((err = wl_handle_join(cfg, dev, &assoc_info)) != BCME_OK) {
@@ -6351,9 +6355,11 @@ fail:
 		wl_pkt_mon_start(cfg, dev);
 #endif /* DBG_PKT_MON */
 	}
+#ifdef WL_EXT_IAPSTA
 	if (!err)
 		wl_ext_in4way_sync(dev, STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY,
 			WL_EXT_STATUS_CONNECTING, NULL);
+#endif
 
 	mutex_unlock(&cfg->connect_sync);
 	return err;
@@ -6473,8 +6479,10 @@ wl_cfg80211_disconnect(struct wiphy *wiphy, struct net_device *dev,
 					WL_ERR(("error (%d)\n", err));
 					goto exit;
 				}
+#ifdef WL_EXT_IAPSTA
 				wl_ext_in4way_sync(dev, STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY|STA_WAIT_DISCONNECTED,
 					WL_EXT_STATUS_DISCONNECTING, NULL);
+#endif
 		}
 #ifdef WL_WPS_SYNC
 		/* If are in WPS reauth state, then we would be
@@ -7007,8 +7015,10 @@ exit:
 #ifdef WL_GCMP
 	wl_set_wsec_info_algos(dev, algos, mask);
 #endif /* WL_GCMP */
+#ifdef WL_EXT_IAPSTA
 	wl_ext_in4way_sync(dev, STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY,
 		WL_EXT_STATUS_ADD_KEY, NULL);
+#endif
 	return err;
 }
 
@@ -9140,11 +9150,11 @@ wl_cfg80211_send_action_frame(struct wiphy *wiphy, struct net_device *dev,
 		/* update channel */
 		if (cfg->afx_hdl->peer_chan != WL_INVALID) {
 			af_params->channel = cfg->afx_hdl->peer_chan;
-			WL_ERR(("Attempt tx on peer listen channel:%d ",
+			WL_ERR(("Attempt tx on peer listen channel:%d\n",
 				cfg->afx_hdl->peer_chan));
 		} else {
 			WL_ERR(("Attempt tx with the channel provided by userspace."
-			"Channel: %d\n", af_params->channel));
+			"Channel: %d\n", CHSPEC_CHANNEL(af_params->channel)));
 		}
 	}
 
@@ -9735,11 +9745,13 @@ wl_cfg80211_del_station(
 			return -EFAULT;
 		}
 	}
+#ifdef WL_EXT_IAPSTA
 	err = wl_ext_in4way_sync(ndev, AP_WAIT_STA_RECONNECT,
 		WL_EXT_STATUS_DELETE_STA, (void *)mac_addr);
 	if (err) {
 		return 0;
 	}
+#endif
 
 	assoc_maclist->count = MAX_NUM_OF_ASSOCIATED_DEV;
 	err = wldev_ioctl_get(ndev, WLC_GET_ASSOCLIST,
@@ -12040,7 +12052,9 @@ wl_handle_assoc_fail(struct bcm_cfg80211 *cfg, wl_assoc_status_t *as, bool compl
 		WL_ERR(("Event:%d Wrong bssid:" MACDBG "\n", as->event_type, MAC2STRDBG(as->addr)));
 		return BCME_OK;
 	}
+#ifdef WL_EXT_IAPSTA
 	wl_ext_iapsta_enable_master_if(ndev, FALSE);
+#endif
 
 	/* A connect request in Connected/Connecting will have the
 	 * NESTED_CONNECT state set.
@@ -12050,8 +12064,10 @@ wl_handle_assoc_fail(struct bcm_cfg80211 *cfg, wl_assoc_status_t *as, bool compl
 		wl_clr_drv_status(cfg, DISCONNECTING, ndev);
 		wl_clr_drv_status(cfg, NESTED_CONNECT, ndev);
 		WL_INFORM_MEM(("Disconnect from nested connect context\n"));
+#ifdef WL_EXT_IAPSTA
 		wl_ext_in4way_sync(ndev, STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY|STA_WAIT_DISCONNECTED,
 			WL_EXT_STATUS_DISCONNECTED, NULL);
+#endif
 		return BCME_OK;
 	}
 
@@ -12198,9 +12214,11 @@ wl_handle_link_down(struct bcm_cfg80211 *cfg, wl_assoc_status_t *as)
 		wl_clr_drv_status(cfg, DISCONNECTING, ndev);
 		wl_clr_drv_status(cfg, NESTED_CONNECT, ndev);
 		WL_INFORM_MEM(("Disconnect from nested connect context\n"));
+#ifdef WL_EXT_IAPSTA
 		wl_ext_in4way_sync(ndev, STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY|STA_WAIT_DISCONNECTED,
 			WL_EXT_STATUS_DISCONNECTED, NULL);
 		wl_ext_iapsta_restart_master(ndev);
+#endif
 		return 0;
 	}
 
@@ -12283,9 +12301,11 @@ wl_handle_link_down(struct bcm_cfg80211 *cfg, wl_assoc_status_t *as)
 
 	/* clear profile before reporting link down */
 	wl_init_prof(cfg, ndev);
+#ifdef WL_EXT_IAPSTA
 	wl_ext_in4way_sync(ndev, STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY|STA_WAIT_DISCONNECTED,
 		WL_EXT_STATUS_DISCONNECTED, NULL);
 	wl_ext_iapsta_restart_master(ndev);
+#endif
 
 	CFG80211_DISCONNECTED(ndev, reason, ie_ptr, ie_len,
 		loc_gen, GFP_KERNEL);
@@ -13359,7 +13379,9 @@ wl_bss_roaming_done(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 #endif /* CUSTOM_LONG_RETRY_LIMIT */
 	DHD_STATLOG_CTRL(dhdp, ST(REASSOC_INFORM),
 		dhd_net2idx(dhdp->info, ndev), 0);
+#ifdef WL_EXT_IAPSTA
 	wl_ext_in4way_sync(ndev, 0, WL_EXT_STATUS_CONNECTED, NULL);
+#endif
 
 #if (defined(CONFIG_ARCH_MSM) && defined(CFG80211_ROAMED_API_UNIFIED)) || \
 	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0)) || \
@@ -13699,12 +13721,16 @@ wl_bss_connect_done(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 
 	if (completed) {
 		WL_MSG(ndev->name, "Report connect result - connection succeeded\n");
+#ifdef WL_EXT_IAPSTA
 		wl_ext_in4way_sync(ndev, 0, WL_EXT_STATUS_CONNECTED, NULL);
 		wl_ext_iapsta_enable_master_if(ndev, TRUE);
+#endif
 	} else {
 		WL_MSG(ndev->name, "Report connect result - connection failed\n");
+#ifdef WL_EXT_IAPSTA
 		wl_ext_in4way_sync(ndev, STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY|STA_WAIT_DISCONNECTED,
 			WL_EXT_STATUS_DISCONNECTED, NULL);
+#endif
 	}
 
 #ifdef WL_FILS
@@ -13881,7 +13907,9 @@ wl_stop_wait_next_action_frame(struct bcm_cfg80211 *cfg, struct net_device *ndev
 			err = wldev_iovar_setint_bsscfg(ndev, "actframe_abort", 1, bsscfgidx);
 			if (err < 0) {
 				if (err == BCME_UNSUPPORTED) {
-					wl_cfgscan_cancel_scan(cfg);
+					mutex_lock(&cfg->scan_sync);
+					wl_cfgscan_scan_abort(cfg);
+					mutex_unlock(&cfg->scan_sync);
 				} else {
 					WL_ERR(("actframe_abort failed. ret:%d\n", err));
 				}
@@ -17218,8 +17246,10 @@ s32 wl_cfg80211_up(struct net_device *net)
 	}
 	ioctl_version = val;
 	WL_TRACE(("WLC_GET_VERSION=%d\n", ioctl_version));
+#ifdef WL_EXT_IAPSTA
 	wl_ext_in4way_sync(net, STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY|STA_WAIT_DISCONNECTED,
 		WL_EXT_STATUS_DISCONNECTED, NULL);
+#endif
 
 	mutex_lock(&cfg->usr_sync);
 #if defined(BCMDONGLEHOST)
@@ -17626,7 +17656,7 @@ s32 wl_cfg80211_get_p2p_dev_addr(struct net_device *net, struct ether_addr *p2pd
 		return -1;
 	if (!p2p_is_on(cfg)) {
 		get_primary_mac(cfg, &primary_mac);
-		memcpy((void *)&p2pdev_addr, (void *)&primary_mac, sizeof(p2pdev_addr));
+		memcpy((void *)&p2pdev_addr, (void *)&primary_mac, ETHER_ADDR_LEN);
 	} else {
 		memcpy(p2pdev_addr->octet, wl_to_p2p_bss_macaddr(cfg, P2PAPI_BSSCFG_DEVICE).octet,
 			ETHER_ADDR_LEN);
@@ -22413,6 +22443,14 @@ wl_notify_start_auth(struct bcm_cfg80211 *cfg,
 		wl_delay(10);
 	}
 
+#ifdef WL_EXT_IAPSTA
+	err = wl_ext_in4way_sync(ndev, STA_START_AUTH_DELAY, WL_EXT_STATUS_CONNECTING, NULL);
+	if (err) {
+		WL_ERR(("Failed to notify external auth req(%d)\n", err));
+		return BCME_ERROR;
+	}
+#endif
+
 	err = cfg80211_external_auth_request(ndev, &ext_auth_param, GFP_KERNEL);
 	if (err) {
 		WL_ERR(("Send external auth request failed, ret %d\n", err));
@@ -22456,10 +22494,12 @@ wl_handle_auth_event(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 
 	if (!len) {
 		WL_ERR(("WLC_E_AUTH has no payload. status %d reason %d\n",
-			ntoh32(e->status), ntoh32(e->reason)));
+			status, ntoh32(e->reason)));
+#ifdef WL_EXT_IAPSTA
 		if (status != WLC_E_STATUS_SUCCESS)
 			wl_ext_in4way_sync(ndev, STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY|STA_WAIT_DISCONNECTED,
 				WL_EXT_STATUS_DISCONNECTED, NULL);
+#endif
 		return WL_INVALID;
 	}
 
@@ -22506,7 +22546,9 @@ wl_handle_auth_event(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 	err = wl_frame_get_mgmt(cfg, FC_AUTH, &da, &e->addr, &bssid,
 		&mgmt_frame, &len, body);
 	if (!err) {
+#ifdef WL_EXT_IAPSTA
 		wl_ext_update_extsae_4way(ndev, (struct ieee80211_mgmt *)mgmt_frame, FALSE);
+#endif
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0))
 		cfg80211_rx_mgmt(cfgdev, freq, 0, mgmt_frame, len, 0);
 #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 12, 0))
@@ -22587,10 +22629,13 @@ wl_cfg80211_mgmt_auth_tx(struct net_device *dev, bcm_struct_cfgdev *cfgdev,
 		if (unlikely(err)) {
 			WL_ERR(("Failed to send auth(%d)\n", err));
 			ack = false;
-		} else {
+		}
+#ifdef WL_EXT_IAPSTA
+		else {
 			const struct ieee80211_mgmt *mgmt = (const struct ieee80211_mgmt *)buf;
 			wl_ext_update_extsae_4way(dev, mgmt, TRUE);
 		}
+#endif
 	}
 
 	MFREE(cfg->osh, ambuf, param_len);

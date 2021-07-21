@@ -1070,9 +1070,11 @@ wl_iw_set_wap(
 		if ((error = dev_wlc_ioctl(dev, WLC_DISASSOC, &scbval, sizeof(scb_val_t)))) {
 			WL_ERROR(("WLC_DISASSOC failed (%d).\n", error));
 		}
+#ifdef WL_EXT_IAPSTA
 		wl_ext_in4way_sync_wext(dev,
 			STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY|STA_WAIT_DISCONNECTED,
 			WL_EXT_STATUS_DISCONNECTING, NULL);
+#endif
 		return 0;
 	}
 	/* WL_ASSOC(("Assoc to %s\n", bcm_ether_ntoa((struct ether_addr *)&(awrq->sa_data),
@@ -1091,8 +1093,10 @@ wl_iw_set_wap(
 		}
 		WL_MSG(dev->name, "join BSSID="MACSTR"\n", MAC2STR((u8 *)awrq->sa_data));
 	}
+#ifdef WL_EXT_IAPSTA
 	wl_ext_in4way_sync_wext(dev, STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY,
 		WL_EXT_STATUS_CONNECTING, NULL);
+#endif
 
 	return 0;
 }
@@ -1155,9 +1159,11 @@ wl_iw_mlme(
 		WL_ERROR(("Invalid ioctl data.\n"));
 		return error;
 	}
+#ifdef WL_EXT_IAPSTA
 	wl_ext_in4way_sync_wext(dev,
 			STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY|STA_WAIT_DISCONNECTED,
 			WL_EXT_STATUS_DISCONNECTING, NULL);
+#endif
 
 	return error;
 }
@@ -1364,16 +1370,20 @@ wl_iw_iscan_set_scan(
 	struct dhd_pub *dhd = dhd_get_pub(dev);
 	wl_wext_info_t *wext_info = NULL;
 	wlc_ssid_t ssid;
+#ifdef WL_EXT_IAPSTA
 	int err;
+#endif
 #ifndef WL_ESCAN
 	iscan_info_t *iscan;
 #endif
 
 	DHD_CHECK(dhd, dev);
 	wext_info = dhd->wext_info;
+#ifdef WL_EXT_IAPSTA
 	err = wl_ext_in4way_sync_wext(dev, STA_NO_SCAN_IN4WAY, WL_EXT_STATUS_SCAN, NULL);
 	if (err)
 		return err;
+#endif
 #ifdef WL_ESCAN
 	/* default Broadcast scan */
 	memset(&ssid, 0, sizeof(ssid));
@@ -1944,8 +1954,10 @@ wl_iw_set_essid(
 			}
 			WL_MSG(dev->name, "join SSID=\"%s\"\n", ssid.SSID);
 		}
+#ifdef WL_EXT_IAPSTA
 		wl_ext_in4way_sync_wext(dev, STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY,
 			WL_EXT_STATUS_CONNECTING, NULL);
+#endif
 	}
 	/* If essid null then it is "iwconfig <interface> essid off" command */
 	else {
@@ -1956,9 +1968,11 @@ wl_iw_set_essid(
 			WL_ERROR(("WLC_DISASSOC failed (%d).\n", error));
 			return error;
 		}
+#ifdef WL_EXT_IAPSTA
 		wl_ext_in4way_sync_wext(dev,
 			STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY|STA_WAIT_DISCONNECTED,
 			WL_EXT_STATUS_DISCONNECTING, NULL);
+#endif
 	}
 	return 0;
 }
@@ -2766,8 +2780,10 @@ wl_iw_set_encodeext(
 		error = dev_wlc_ioctl(dev, WLC_SET_KEY, &key, sizeof(key));
 		if (error)
 			return error;
+#ifdef WL_EXT_IAPSTA
 		wl_ext_in4way_sync_wext(dev, STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY,
 			WL_EXT_STATUS_ADD_KEY, NULL);
+#endif
 	}
 	return 0;
 }
@@ -3551,7 +3567,7 @@ wl_iw_conn_status_str(uint32 event_type, uint32 status, uint32 reason,
  * The caller supplies a buffer to hold the generated string.
  */
 static bool
-wl_iw_check_conn_fail(wl_event_msg_t *e, char* stringBuf, uint buflen)
+wl_iw_check_conn_fail(const wl_event_msg_t *e, char* stringBuf, uint buflen)
 {
 	uint32 event = ntoh32(e->event_type);
 	uint32 status =  ntoh32(e->status);
@@ -3571,8 +3587,8 @@ wl_iw_check_conn_fail(wl_event_msg_t *e, char* stringBuf, uint buflen)
 #endif /* IW_CUSTOM_MAX */
 
 void
-wl_iw_event(struct net_device *dev, struct wl_wext_info *wext_info,
-	wl_event_msg_t *e, void* data)
+wl_iw_event(struct net_device *dev, void *argu,
+	const wl_event_msg_t *e, void* data)
 {
 #if WIRELESS_EXT > 13
 	union iwreq_data wrqu;
@@ -3584,6 +3600,7 @@ wl_iw_event(struct net_device *dev, struct wl_wext_info *wext_info,
 	uint32 status =  ntoh32(e->status);
 	uint32 reason =  ntoh32(e->reason);
 #ifndef WL_ESCAN
+	struct wl_wext_info *wext_info = (struct wl_wext_info *)argu;
 	iscan_info_t *iscan = &wext_info->iscan;
 #endif
 
@@ -3605,9 +3622,11 @@ wl_iw_event(struct net_device *dev, struct wl_wext_info *wext_info,
 		break;
 	case WLC_E_DEAUTH:
 	case WLC_E_DISASSOC:
+#ifdef WL_EXT_IAPSTA
 		wl_ext_in4way_sync_wext(dev,
 			STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY|STA_WAIT_DISCONNECTED,
 			WL_EXT_STATUS_DISCONNECTED, NULL);
+#endif
 		WL_MSG_RLMT(dev->name, &e->addr, ETHER_ADDR_LEN,
 			"disconnected with "MACSTR", event %d, reason %d\n",
 			MAC2STR((u8 *)wrqu.addr.sa_data), event_type, reason);
@@ -3619,9 +3638,11 @@ wl_iw_event(struct net_device *dev, struct wl_wext_info *wext_info,
 			MAC2STR((u8 *)wrqu.addr.sa_data), event_type, reason);
 		bzero(wrqu.addr.sa_data, ETHER_ADDR_LEN);
 		bzero(&extra, ETHER_ADDR_LEN);
+#ifdef WL_EXT_IAPSTA
 		wl_ext_in4way_sync_wext(dev,
 			STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY|STA_WAIT_DISCONNECTED,
 			WL_EXT_STATUS_DISCONNECTED, NULL);
+#endif
 		break;
 
 	case WLC_E_LINK:
@@ -3631,9 +3652,11 @@ wl_iw_event(struct net_device *dev, struct wl_wext_info *wext_info,
 				MAC2STR((u8 *)wrqu.addr.sa_data), reason);
 			bzero(wrqu.addr.sa_data, ETHER_ADDR_LEN);
 			bzero(&extra, ETHER_ADDR_LEN);
+#ifdef WL_EXT_IAPSTA
 			wl_ext_in4way_sync_wext(dev,
 				STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY|STA_WAIT_DISCONNECTED,
 				WL_EXT_STATUS_DISCONNECTED, NULL);
+#endif
 		} else {
 			WL_MSG(dev->name, "Link UP with "MACSTR"\n",
 				MAC2STR((u8 *)wrqu.addr.sa_data));

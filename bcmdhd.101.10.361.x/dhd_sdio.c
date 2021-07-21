@@ -7532,6 +7532,59 @@ dhdsdio_hostmail(dhd_bus_t *bus, uint32 *hmbd)
 	return intstatus;
 }
 
+#ifdef BCMSDIO_INTSTATUS_WAR
+static uint32
+dhdsdio_read_intstatus_byte(dhd_bus_t *bus)
+{
+	bcmsdh_info_t *sdh = bus->sdh;
+	sdpcmd_regs_t *regs = bus->regs;
+	uint32 newstatus = 0, intstatus_byte = 0;
+	uint retries = 0;
+	int err1 = 0, err2 = 0, err3 = 0, err4 = 0;
+
+	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
+
+	/* read_intr_mode:
+	  * 0: word mode only (default)
+	  * 1: byte mode after read word failed
+	  * 2: byte mode only
+	*/
+	if (bus->dhd->conf->read_intr_mode) {
+		if (bus->dhd->conf->read_intr_mode == 1) {
+			R_SDREG(newstatus, &regs->intstatus, retries);
+			if (!bcmsdh_regfail(bus->sdh)) {
+				goto exit;
+			}
+		}
+		intstatus_byte = bcmsdh_cfg_read(bus->sdh, SDIO_FUNC_1,
+			((unsigned long)&regs->intstatus & 0xffff) + 0, &err1);
+		if (!err1)
+			newstatus |= intstatus_byte;
+		intstatus_byte = bcmsdh_cfg_read(bus->sdh, SDIO_FUNC_1,
+			((unsigned long)&regs->intstatus & 0xffff) + 1, &err2) << 8;
+		if (!err2)
+			newstatus |= intstatus_byte;
+		intstatus_byte |= bcmsdh_cfg_read(bus->sdh, SDIO_FUNC_1,
+			((unsigned long)&regs->intstatus & 0xffff) + 2, &err3) << 16;
+		if (!err3)
+			newstatus |= intstatus_byte;
+		intstatus_byte |= bcmsdh_cfg_read(bus->sdh, SDIO_FUNC_1,
+			((unsigned long)&regs->intstatus & 0xffff) + 3, &err4) << 24;
+		if (!err4)
+			newstatus |= intstatus_byte;
+
+		if (!err1 || !err2 || !err3 || !err4)
+			sdh->regfail = FALSE;
+	}
+	else {
+		R_SDREG(newstatus, &regs->intstatus, retries);
+	}
+
+exit:
+	return newstatus;
+}
+#endif
+
 static bool
 dhdsdio_dpc(dhd_bus_t *bus)
 {
@@ -7634,7 +7687,11 @@ dhdsdio_dpc(dhd_bus_t *bus)
 	bcmsdh_btsdio_process_f3_intr();
 #endif /* defined (BT_OVER_SDIO) */
 
+#ifdef BCMSDIO_INTSTATUS_WAR
+		newstatus = dhdsdio_read_intstatus_byte(bus);
+#else
 		R_SDREG(newstatus, &regs->intstatus, retries);
+#endif
 		bus->f1regdata++;
 		if (bcmsdh_regfail(bus->sdh))
 			newstatus = 0;

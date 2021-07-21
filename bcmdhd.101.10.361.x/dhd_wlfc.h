@@ -32,7 +32,7 @@
 
 #define KERNEL_THREAD_RETURN_TYPE int
 
-typedef int (*f_commitpkt_t)(void* ctx, void* p);
+typedef int (*f_commitpkt_t)(struct dhd_bus *ctx, void* p);
 typedef bool (*f_processpkt_t)(void* p, void* arg);
 
 #define WLFC_UNSUPPORTED -9999
@@ -551,7 +551,7 @@ int dhd_wlfc_parse_header_info(dhd_pub_t *dhd, void* pktbuf, int tlv_hdr_len,
 	uchar *reorder_info_buf, uint *reorder_info_len);
 KERNEL_THREAD_RETURN_TYPE dhd_wlfc_transfer_packets(void *data);
 int dhd_wlfc_commit_packets(dhd_pub_t *dhdp, f_commitpkt_t fcommit,
-	void* commit_ctx, void *pktbuf, bool need_toggle_host_if);
+	struct dhd_bus *commit_ctx, void *pktbuf, bool need_toggle_host_if);
 int dhd_wlfc_txcomplete(dhd_pub_t *dhd, void *txp, bool success);
 int dhd_wlfc_init(dhd_pub_t *dhd);
 #ifdef SUPPORT_P2P_GO_PS

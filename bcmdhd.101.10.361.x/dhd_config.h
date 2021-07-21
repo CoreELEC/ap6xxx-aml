@@ -250,6 +250,9 @@ typedef struct dhd_conf {
 #ifdef BCMSDIO_TXSEQ_SYNC
 	bool txseq_sync;
 #endif
+#ifdef BCMSDIO_INTSTATUS_WAR
+	uint read_intr_mode;
+#endif
 #endif
 #ifdef BCMPCIE
 	int bus_deepsleep_disable;
@@ -315,6 +318,9 @@ typedef struct dhd_conf {
 	uint tput_measure_ms;
 	struct osl_timespec tput_ts;
 	unsigned long net_len;
+#endif
+#ifdef TPUT_MONITOR
+	uint tput_monitor_ms;
 #endif
 #ifdef DHD_TPUT_PATCH
 	bool tput_patch;

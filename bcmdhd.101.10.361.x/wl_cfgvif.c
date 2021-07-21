@@ -2860,7 +2860,11 @@ wl_cfg80211_set_ap_role(
 #endif /* WLEASYMESH */
 		}
 	}
-	else if (bssidx == 0 && !new_chip && !wl_ext_iapsta_other_if_enabled(dev)) {
+	else if (bssidx == 0 && !new_chip
+#ifdef WL_EXT_IAPSTA
+			&& !wl_ext_iapsta_other_if_enabled(dev)
+#endif
+			) {
 		err = wldev_ioctl_set(dev, WLC_DOWN, &ap, sizeof(s32));
 		if (err < 0) {
 			WL_ERR(("WLC_DOWN error %d\n", err));
@@ -4456,7 +4460,9 @@ wl_notify_connect_status_ap(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 #ifdef BIGDATA_SOFTAP
 			wl_ap_stainfo_init(cfg);
 #endif /* BIGDATA_SOFTAP */
+#ifdef WL_EXT_IAPSTA
 			wl_ext_in4way_sync(ndev, 0, WL_EXT_STATUS_AP_ENABLED, NULL);
+#endif
 			return 0;
 		}
 	}
@@ -4499,8 +4505,10 @@ wl_notify_connect_status_ap(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 		sinfo.assoc_req_ies_len = len;
 		WL_MSG(ndev->name, "new sta event for "MACDBG "\n",
 			MAC2STRDBG(e->addr.octet));
+#ifdef WL_EXT_IAPSTA
 		wl_ext_in4way_sync(ndev, AP_WAIT_STA_RECONNECT,
 			WL_EXT_STATUS_STA_CONNECTED, (void *)&e->addr);
+#endif
 		cfg80211_new_sta(ndev, e->addr.octet, &sinfo, GFP_ATOMIC);
 #ifdef WL_WPS_SYNC
 		wl_wps_session_update(ndev, WPS_STATE_LINKUP, e->addr.octet);
@@ -4519,8 +4527,10 @@ wl_notify_connect_status_ap(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 		 */
 		WL_MSG_RLMT(ndev->name, &e->addr, ETHER_ADDR_LEN,
 			"del sta event for "MACDBG "\n", MAC2STRDBG(e->addr.octet));
+#ifdef WL_EXT_IAPSTA
 		wl_ext_in4way_sync(ndev, AP_WAIT_STA_RECONNECT,
 			WL_EXT_STATUS_STA_DISCONNECTED, (void *)&e->addr);
+#endif
 		cfg80211_del_sta(ndev, e->addr.octet, GFP_ATOMIC);
 #ifdef WL_WPS_SYNC
 		wl_wps_session_update(ndev, WPS_STATE_LINKDOWN, e->addr.octet);

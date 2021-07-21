@@ -132,7 +132,7 @@ void wl_cfg80211_cancel_p2plo(struct bcm_cfg80211 *cfg);
 static void _wl_notify_scan_done(struct bcm_cfg80211 *cfg, bool aborted);
 static s32 wl_notify_escan_complete(struct bcm_cfg80211 *cfg,
 	struct net_device *ndev, bool aborted);
-static void wl_cfgscan_scan_abort(struct bcm_cfg80211 *cfg);
+void wl_cfgscan_scan_abort(struct bcm_cfg80211 *cfg);
 static void _wl_cfgscan_cancel_scan(struct bcm_cfg80211 *cfg);
 
 #ifdef ESCAN_CHANNEL_CACHE
@@ -2231,7 +2231,7 @@ wl_cfgscan_handle_scanbusy(struct bcm_cfg80211 *cfg, struct net_device *ndev, s3
 		return scanbusy_err;
 	}
 	if (err == BCME_BUSY || err == BCME_NOTREADY) {
-		WL_ERR(("Scan err = (%d), busy?%d", err, -EBUSY));
+		WL_ERR(("Scan err = (%d), busy?%d\n", err, -EBUSY));
 		scanbusy_err = -EBUSY;
 	} else if ((err == BCME_EPERM) && cfg->scan_suppressed) {
 		WL_ERR(("Scan not permitted due to scan suppress\n"));
@@ -2293,7 +2293,7 @@ wl_cfgscan_handle_scanbusy(struct bcm_cfg80211 *cfg, struct net_device *ndev, s3
 			bzero(&bssid, sizeof(bssid));
 			if ((ret = wldev_ioctl_get(ndev, WLC_GET_BSSID,
 				&bssid, ETHER_ADDR_LEN)) == 0) {
-				WL_ERR(("FW is connected with " MACDBG "/n",
+				WL_ERR(("FW is connected with " MACDBG "\n",
 					MAC2STRDBG(bssid.octet)));
 			} else {
 				WL_ERR(("GET BSSID failed with %d\n", ret));
@@ -2637,10 +2637,12 @@ wl_cfg80211_scan(struct wiphy *wiphy, struct net_device *ndev,
 			 return -ENODEV;
 		}
 	}
+#ifdef WL_EXT_IAPSTA
 	err = wl_ext_in4way_sync(ndev_to_wlc_ndev(ndev, cfg), STA_NO_SCAN_IN4WAY,
 		WL_EXT_STATUS_SCAN, NULL);
 	if (err)
 		return err;
+#endif
 
 	err = __wl_cfg80211_scan(wiphy, ndev, request, NULL);
 	if (unlikely(err)) {
@@ -2731,7 +2733,7 @@ void wl_cfgscan_cancel_scan(struct bcm_cfg80211 *cfg)
 * followed by indication to upper layer, the current function wl_cfgscan_scan_abort, does
 * only FW abort.
 */
-static void wl_cfgscan_scan_abort(struct bcm_cfg80211 *cfg)
+void wl_cfgscan_scan_abort(struct bcm_cfg80211 *cfg)
 {
 	void *params = NULL;
 	s32 params_size = 0;
@@ -5090,15 +5092,12 @@ wl_priortize_scan_over_listen(struct bcm_cfg80211 *cfg,
 	(wdev->netdev ? (strncmp(wdev->netdev->name, "p2p0", strlen("p2p0")) == 0) : false)
 
 s32
-#if defined(WL_CFG80211_P2P_DEV_IF)
-wl_cfgscan_remain_on_channel(struct wiphy *wiphy, bcm_struct_cfgdev *cfgdev,
-	struct ieee80211_channel *channel, unsigned int duration, u64 *cookie)
-#else
 wl_cfgscan_remain_on_channel(struct wiphy *wiphy, bcm_struct_cfgdev *cfgdev,
 	struct ieee80211_channel *channel,
+#if !defined(WL_CFG80211_P2P_DEV_IF)
 	enum nl80211_channel_type channel_type,
-	unsigned int duration, u64 *cookie)
 #endif /* WL_CFG80211_P2P_DEV_IF */
+	unsigned int duration, u64 *cookie)
 {
 	s32 target_channel;
 	u32 id;

@@ -4642,7 +4642,7 @@ void dhd_rx_wq_wakeup(struct work_struct *ptr)
 void dhd_start_xmit_wq_adapter(struct work_struct *ptr)
 {
 	struct dhd_rx_tx_work *work;
-	int ret;
+	netdev_tx_t ret;
 	dhd_info_t *dhd;
 	struct dhd_bus * bus;
 
@@ -4676,7 +4676,7 @@ netdev_tx_t
 BCMFASTPATH(dhd_start_xmit_wrapper)(struct sk_buff *skb, struct net_device *net)
 {
 	struct dhd_rx_tx_work *start_xmit_work;
-	int ret;
+	netdev_tx_t ret;
 	dhd_info_t *dhd = DHD_DEV_INFO(net);
 
 	if (dhd->pub.busstate == DHD_BUS_SUSPEND) {
@@ -5643,12 +5643,12 @@ dhd_check_shinfo_nrfrags(dhd_pub_t *dhdp, void *pktbuf,
 			(uint64)skb, (uint64)(skb->data), (uint64)(skb->head), (uint64)(skb->tail),
 			(uint64)(skb->end), skb->len, (uint64)shinfo, pktid));
 #else
-		DHD_ERROR(("!!Invalid nr_frags: %u pa:0x%lx "
-			"skb: 0x%llx skb_data: 0x%llx skb_head: 0x%llx skb_tail: 0x%llx "
-			"skb_end: 0x%llx skb_len: %u shinfo: 0x%llx pktid: %u\n",
-			shinfo->nr_frags, (unsigned long)pa,
-			(uint64)skb, (uint64)(skb->data), (uint64)(skb->head), (uint64)(skb->tail),
-			(uint64)(skb->end), skb->len, (uint64)shinfo, pktid));
+		DHD_ERROR(("!!Invalid nr_frags: %u "
+			"skb: 0x%x skb_data: 0x%x skb_head: 0x%x skb_tail: 0x%x "
+			"skb_end: 0x%x skb_len: %u shinfo: 0x%x pktid: %u\n",
+			shinfo->nr_frags,
+			(uint)skb, (uint)(skb->data), (uint)(skb->head), (uint)(skb->tail),
+			(uint)(skb->end), skb->len, (uint)shinfo, pktid));
 #endif
 		prhex("shinfo", (char*)shinfo, sizeof(struct skb_shared_info));
 		if (!dhd_query_bus_erros(dhdp)) {
@@ -8895,15 +8895,15 @@ exit:
 			wl_android_set_wifi_on_flag(FALSE);
 #else
 			wl_android_wifi_off(net, TRUE);
-#if defined(WL_EXT_IAPSTA) || defined(USE_IW) || defined(WL_ESCAN)
 #ifdef WL_EXT_IAPSTA
 			wl_ext_iapsta_dettach_netdev(net, ifidx);
 #endif /* WL_EXT_IAPSTA */
 #ifdef WL_ESCAN
 			wl_escan_event_dettach(net, &dhd->pub);
 #endif /* WL_ESCAN */
+#ifdef WL_EVENT
 			wl_ext_event_dettach_netdev(net, ifidx);
-#endif /* WL_EXT_IAPSTA || USE_IW || WL_ESCAN */
+#endif /* WL_EVENT */
 #endif /* BT_OVER_SDIO */
 #endif /* WLAN_ACCEL_BOOT */
 		}
@@ -9168,7 +9168,7 @@ dhd_open(struct net_device *net)
 	}
 
 	WL_MSG(net->name, "Enter\n");
-	DHD_ERROR(("\n%s\n", dhd_version));
+	DHD_ERROR(("%s\n", dhd_version));
 	DHD_MUTEX_LOCK();
 	/* Init wakelock */
 	if (!dhd_download_fw_on_driverload) {
@@ -9257,15 +9257,15 @@ dhd_open(struct net_device *net)
 		atomic_set(&dhd->pend_8021x_cnt, 0);
 		if (!dhd_download_fw_on_driverload) {
 			DHD_STATLOG_CTRL(&dhd->pub, ST(WLAN_POWER_ON), ifidx, 0);
-#if defined(WL_EXT_IAPSTA) || defined(USE_IW) || defined(WL_ESCAN)
+#ifdef WL_EVENT
 			wl_ext_event_attach_netdev(net, ifidx, dhd->iflist[ifidx]->bssidx);
+#endif /* WL_EVENT */
 #ifdef WL_ESCAN
 			wl_escan_event_attach(net, &dhd->pub);
 #endif /* WL_ESCAN */
 #ifdef WL_EXT_IAPSTA
 			wl_ext_iapsta_attach_netdev(net, ifidx, dhd->iflist[ifidx]->bssidx);
 #endif /* WL_EXT_IAPSTA */
-#endif /* WL_EXT_IAPSTA || USE_IW || WL_ESCAN */
 #if defined(USE_INITIAL_2G_SCAN) || defined(USE_INITIAL_SHORT_DWELL_TIME)
 			g_first_broadcast_scan = TRUE;
 #endif /* USE_INITIAL_2G_SCAN || USE_INITIAL_SHORT_DWELL_TIME */
@@ -9528,6 +9528,10 @@ dhd_open(struct net_device *net)
 
 exit:
 	mutex_unlock(&dhd->pub.ndev_op_sync);
+#if defined(ENABLE_INSMOD_NO_POWER_OFF) && defined(ENABLE_INSMOD_NO_FW_LOAD)
+	dhd_download_fw_on_driverload = FALSE;
+	dhd_driver_init_done = TRUE;
+#endif
 	if (ret) {
 		dhd_stop(net);
 	}
@@ -9619,7 +9623,7 @@ dhd_static_if_open(struct net_device *net)
 	primary_netdev = bcmcfg_to_prmry_ndev(cfg);
 
 	if (!IS_CFG80211_STATIC_IF(cfg, net)) {
-		DHD_TRACE(("non-static interface (%s)..do nothing \n", net->name));
+		WL_MSG(net->name, "non-static interface ..do nothing\n");
 		ret = BCME_OK;
 		goto done;
 	}
@@ -10037,8 +10041,9 @@ dhd_update_iflist_info(dhd_pub_t *dhdp, struct net_device *ndev, int ifidx,
 			/* To and fro locations have same size - ETHER_ADDR_LEN */
 			(void)memcpy_s(&ifp->mac_addr, ETHER_ADDR_LEN, mac, ETHER_ADDR_LEN);
 		}
-#if defined(WL_EXT_IAPSTA) || defined(USE_IW) || defined(WL_ESCAN)
+#ifdef WL_EVENT
 		wl_ext_event_attach_netdev(ndev, ifidx, bssidx);
+#endif /* WL_EVENT */
 #ifdef WL_ESCAN
 		wl_escan_event_attach(ndev, dhdp);
 #endif /* WL_ESCAN */
@@ -10047,15 +10052,17 @@ dhd_update_iflist_info(dhd_pub_t *dhdp, struct net_device *ndev, int ifidx,
 		wl_ext_iapsta_attach_netdev(ndev, ifidx, bssidx);
 		wl_ext_iapsta_attach_name(ndev, ifidx);
 #endif /* WL_EXT_IAPSTA */
-	} else if (if_state == NDEV_STATE_FW_IF_DELETED) {
+	}
+	else if (if_state == NDEV_STATE_FW_IF_DELETED) {
 #ifdef WL_EXT_IAPSTA
 		wl_ext_iapsta_dettach_netdev(ndev, cur_idx);
 #endif /* WL_EXT_IAPSTA */
 #ifdef WL_ESCAN
 		wl_escan_event_dettach(ndev, dhdp);
 #endif /* WL_ESCAN */
+#ifdef WL_EVENT
 		wl_ext_event_dettach_netdev(ndev, cur_idx);
-#endif /* WL_EXT_IAPSTA || USE_IW || WL_ESCAN */
+#endif /* WL_EVENT */
 	}
 	DHD_INFO(("[STATIC_IF] ifp ptr updated for ifidx:%d curidx:%d if_state:%d\n",
 		ifidx, cur_idx, if_state));
@@ -10377,15 +10384,15 @@ dhd_remove_if(dhd_pub_t *dhdpub, int ifidx, bool need_rtnl_lock)
 					unregister_netdev(ifp->net);
 				else
 					unregister_netdevice(ifp->net);
-#if defined(WL_EXT_IAPSTA) || defined(USE_IW) || defined(WL_ESCAN)
 #ifdef WL_EXT_IAPSTA
 				wl_ext_iapsta_dettach_netdev(ifp->net, ifidx);
 #endif /* WL_EXT_IAPSTA */
 #ifdef WL_ESCAN
 				wl_escan_event_dettach(ifp->net, dhdpub);
 #endif /* WL_ESCAN */
+#ifdef WL_EVENT
 				wl_ext_event_dettach_netdev(ifp->net, ifidx);
-#endif /* WL_EXT_IAPSTA || USE_IW || WL_ESCAN */
+#endif /* WL_EVENT */
 			}
 			ifp->net = NULL;
 			DHD_GENERAL_LOCK(dhdpub, flags);
@@ -11351,11 +11358,12 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen
 	dhd_state |= DHD_ATTACH_STATE_CFG80211;
 #endif
 
-#if defined(WL_EXT_IAPSTA) || defined(USE_IW) || defined(WL_ESCAN)
+#ifdef WL_EVENT
 	if (wl_ext_event_attach(net, &dhd->pub) != 0) {
 		DHD_ERROR(("wl_ext_event_attach failed\n"));
 		goto fail;
 	}
+#endif /* WL_EVENT */
 #ifdef WL_ESCAN
 	/* Attach and link in the escan */
 	if (wl_escan_attach(net, &dhd->pub) != 0) {
@@ -11369,7 +11377,6 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen
 		goto fail;
 	}
 #endif /* WL_EXT_IAPSTA */
-#endif /* WL_EXT_IAPSTA || USE_IW || WL_ESCAN */
 #ifdef WL_EXT_GENL
 	if (wl_ext_genl_init(net)) {
 		DHD_ERROR(("wl_ext_genl_init failed\n"));
@@ -15308,7 +15315,7 @@ dhd_legacy_preinit_ioctls(dhd_pub_t *dhd)
 	setbit(mask, WLC_E_ESCAN_RESULT);
 #endif /* WL_ESCAN */
 #ifdef CSI_SUPPORT
-	setbit(eventmask, WLC_E_CSI);
+	setbit(mask, WLC_E_CSI);
 #endif /* CSI_SUPPORT */
 #ifdef RTT_SUPPORT
 	setbit(mask, WLC_E_PROXD);
@@ -15390,7 +15397,7 @@ dhd_legacy_preinit_ioctls(dhd_pub_t *dhd)
 	setbit(mask, WLC_E_MBO);
 #endif /* WL_MBO */
 #ifdef WL_CLIENT_SAE
-	setbit(eventmask_msg->mask, WLC_E_JOIN_START);
+	setbit(mask, WLC_E_JOIN_START);
 #endif /* WL_CLIENT_SAE */
 #ifdef WL_CAC_TS
 	setbit(mask, WLC_E_ADDTS_IND);
@@ -16623,8 +16630,9 @@ dhd_register_if(dhd_pub_t *dhdp, int ifidx, bool need_rtnl_lock)
 	}
 #endif /* BCM_ROUTER_DHD && HNDCTF */
 
-#if defined(WL_EXT_IAPSTA) || defined(USE_IW) || defined(WL_ESCAN)
+#ifdef WL_EVENT
 	wl_ext_event_attach_netdev(net, ifidx, ifp->bssidx);
+#endif /* WL_EVENT */
 #ifdef WL_ESCAN
 	wl_escan_event_attach(net, dhdp);
 #endif /* WL_ESCAN */
@@ -16632,7 +16640,6 @@ dhd_register_if(dhd_pub_t *dhdp, int ifidx, bool need_rtnl_lock)
 	wl_ext_iapsta_attach_netdev(net, ifidx, ifp->bssidx);
 	wl_ext_iapsta_attach_name(net, ifidx);
 #endif /* WL_EXT_IAPSTA */
-#endif /* WL_EXT_IAPSTA || USE_IW || WL_ESCAN */
 
 #if defined(CONFIG_TIZEN)
 	net_stat_tizen_register(net);
@@ -16891,15 +16898,15 @@ void dhd_detach(dhd_pub_t *dhdp)
 #ifdef WL_EXT_GENL
 	wl_ext_genl_deinit(dev);
 #endif
-#if defined(WL_EXT_IAPSTA) || defined(USE_IW) || defined(WL_ESCAN)
 #ifdef WL_EXT_IAPSTA
 	wl_ext_iapsta_dettach(dhdp);
 #endif /* WL_EXT_IAPSTA */
 #ifdef WL_ESCAN
 	wl_escan_detach(dev, dhdp);
 #endif /* WL_ESCAN */
+#ifdef WL_EVENT
 	wl_ext_event_dettach(dhdp);
-#endif /* WL_EXT_IAPSTA || USE_IW || WL_ESCAN */
+#endif /* WL_EVENT */
 
 	/* delete all interfaces, start with virtual  */
 	if (dhd->dhd_state & DHD_ATTACH_STATE_ADD_IF) {
@@ -18325,7 +18332,7 @@ dhd_wl_host_event(dhd_info_t *dhd, int ifidx, void *pktdata, uint16 pktlen,
 		return BCME_OK;
 	}
 
-#if defined(WL_EXT_IAPSTA) || defined(USE_IW)
+#ifdef WL_EVENT
 	wl_ext_event_send(dhd->pub.event_params, event, *data);
 #endif
 

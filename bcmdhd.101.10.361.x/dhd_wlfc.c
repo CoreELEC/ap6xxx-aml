@@ -2028,7 +2028,7 @@ _dhd_wlfc_mac_entry_update(athost_wl_status_info_t* ctx, wlfc_mac_descriptor_t* 
 		if (action == eWLFC_MAC_ENTRY_ACTION_ADD) {
 			entry->suppressed = FALSE;
 			entry->transit_count = 0;
-#ifdef PROPTX_MAXCOUNT
+#if defined(WL_EXT_IAPSTA) && defined(PROPTX_MAXCOUNT)
 			entry->transit_maxcount = wl_ext_get_wlfc_maxcount(ctx->dhdp, ifid);
 #endif /* PROPTX_MAXCOUNT */
 			entry->suppr_transit_count = 0;
@@ -3736,8 +3736,8 @@ exit:
  *     @param[in] need_toggle_host_if   If TRUE, resets flag ctx->toggle_host_if
  */
 int
-dhd_wlfc_commit_packets(dhd_pub_t *dhdp, f_commitpkt_t fcommit, void* commit_ctx, void *pktbuf,
-	bool need_toggle_host_if)
+dhd_wlfc_commit_packets(dhd_pub_t *dhdp, f_commitpkt_t fcommit,
+	struct dhd_bus *commit_ctx, void *pktbuf, bool need_toggle_host_if)
 {
 	int rc = BCME_OK;
 	athost_wl_status_info_t* ctx;

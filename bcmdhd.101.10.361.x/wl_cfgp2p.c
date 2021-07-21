@@ -224,6 +224,7 @@ void wl_cfgp2p_print_actframe(bool tx, void *frame, u32 frame_len, u32 channel)
 	if (!frame || frame_len <= 2)
 		return;
 
+	channel = CHSPEC_CHANNEL(channel);
 	if (wl_cfgp2p_is_pub_action(frame, frame_len)) {
 		pact_frm = (wifi_p2p_pub_act_frame_t *)frame;
 		switch (pact_frm->subtype) {
@@ -1721,7 +1722,7 @@ wl_cfgp2p_tx_action_frame(struct bcm_cfg80211 *cfg, struct net_device *dev,
 
 	CFGP2P_DBG(("\n"));
 	CFGP2P_ACTION(("channel : %u , dwell time : %u wait_afrx:%d\n",
-	    af_params->channel, af_params->dwell_time, cfg->need_wait_afrx));
+	    CHSPEC_CHANNEL(af_params->channel), af_params->dwell_time, cfg->need_wait_afrx));
 
 	wl_clr_p2p_status(cfg, ACTION_TX_COMPLETED);
 	wl_clr_p2p_status(cfg, ACTION_TX_NOACK);
@@ -1745,7 +1746,7 @@ wl_cfgp2p_tx_action_frame(struct bcm_cfg80211 *cfg, struct net_device *dev,
 		cfg->ioctl_buf, WLC_IOCTL_MAXLEN, bssidx, &cfg->ioctl_buf_sync);
 
 	if (ret < 0) {
-		CFGP2P_ACTION(("TX actfrm : ERROR\n"));
+		CFGP2P_ACTION(("TX actfrm : ERROR %d\n", ret));
 		goto exit;
 	}
 

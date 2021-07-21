@@ -6830,10 +6830,11 @@ wl_android_set_auto_channel(struct net_device *dev, const char* cmd_str,
 		}
 	}
 
-	channel = wl_ext_autochannel(dev, ACS_FW_BIT|ACS_DRV_BIT, band);
-	if (channel)
+	channel = wl_ext_autochannel(dev, ACS_DRV_BIT, band);
+	if (channel) {
+		acs_band = CHSPEC_BAND(channel);
 		goto done2;
-	else
+	} else
 		goto done;
 
 	ret = wldev_ioctl_get(dev, WLC_GET_SPECT_MANAGMENT, &spect, sizeof(spect));
@@ -12908,7 +12909,9 @@ int wl_android_init(void)
 {
 	int ret = 0;
 
-#if defined(ENABLE_INSMOD_NO_FW_LOAD) || defined(BUS_POWER_RESTORE)
+#ifdef ENABLE_INSMOD_NO_POWER_OFF
+	dhd_download_fw_on_driverload = TRUE;
+#elif defined(ENABLE_INSMOD_NO_FW_LOAD) || defined(BUS_POWER_RESTORE)
 	dhd_download_fw_on_driverload = FALSE;
 #endif /* ENABLE_INSMOD_NO_FW_LOAD */
 	if (!iface_name[0]) {

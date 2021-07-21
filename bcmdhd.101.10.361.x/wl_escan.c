@@ -461,11 +461,11 @@ wl_escan_remove_lowRSSI_info(struct net_device *dev, struct wl_escan_info *escan
 }
 #endif /* ESCAN_BUF_OVERFLOW_MGMT */
 
-static s32
-wl_escan_handler(struct net_device *dev, struct wl_escan_info *escan,
+void
+wl_escan_ext_handler(struct net_device *dev, void *argu,
 	const wl_event_msg_t *e, void *data)
 {
-	s32 err = BCME_OK;
+	struct wl_escan_info *escan = (struct wl_escan_info *)argu;
 	s32 status = ntoh32(e->status);
 	wl_bss_info_t *bi;
 	wl_escan_result_t *escan_result;
@@ -671,7 +671,7 @@ wl_escan_handler(struct net_device *dev, struct wl_escan_info *escan,
 	}
 exit:
 	mutex_unlock(&escan->usr_sync);
-	return err;
+	return;
 }
 
 static int
@@ -1600,7 +1600,7 @@ wl_escan_event_dettach(struct net_device *dev, dhd_pub_t *dhdp)
 		return ret;
 	}
 
-	wl_ext_event_deregister(dev, dhdp, WLC_E_ESCAN_RESULT, wl_escan_handler);
+	wl_ext_event_deregister(dev, dhdp, WLC_E_ESCAN_RESULT, wl_escan_ext_handler);
 
 	return 0;
 }
@@ -1616,7 +1616,7 @@ wl_escan_event_attach(struct net_device *dev, dhd_pub_t *dhdp)
 		return ret;
 	}
 
-	ret = wl_ext_event_register(dev, dhdp, WLC_E_ESCAN_RESULT, wl_escan_handler,
+	ret = wl_ext_event_register(dev, dhdp, WLC_E_ESCAN_RESULT, wl_escan_ext_handler,
 		escan, PRIO_EVENT_ESCAN);
 	if (ret) {
 		ESCAN_ERROR(dev->name, "wl_ext_event_register err %d\n", ret);
@@ -1640,7 +1640,7 @@ wl_escan_detach(struct net_device *dev, dhd_pub_t *dhdp)
 		kfree(escan->escan_ioctl_buf);
 		escan->escan_ioctl_buf = NULL;
 	}
-	wl_ext_event_deregister(dev, dhdp, WLC_E_ESCAN_RESULT, wl_escan_handler);
+	wl_ext_event_deregister(dev, dhdp, WLC_E_ESCAN_RESULT, wl_escan_ext_handler);
 
 	DHD_OS_PREFREE(dhdp, escan, sizeof(struct wl_escan_info));
 	dhdp->escan = NULL;

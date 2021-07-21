@@ -1,7 +1,7 @@
 
-#if defined(WL_EXT_IAPSTA) || defined(USE_IW)
-#include <bcmendian.h>
 #include <wl_android.h>
+#ifdef WL_EVENT
+#include <bcmendian.h>
 #include <dhd_config.h>
 
 #define EVENT_ERROR(name, arg1, args...) \
@@ -60,7 +60,7 @@ struct wl_event_q {
 	s8 edata[1];
 };
 
-typedef s32(*EXT_EVENT_HANDLER) (struct net_device *dev, void *cb_argu,
+typedef void(*EXT_EVENT_HANDLER) (struct net_device *dev, void *cb_argu,
 	const wl_event_msg_t *e, void *data);
 
 typedef struct event_handler_list {

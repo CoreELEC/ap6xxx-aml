@@ -303,7 +303,7 @@ extern int dhd_get_1905_almac(dhd_pub_t *dhdp, uint8 ifidx, uint8* ea, bool mcas
 
 #define CHIPID_MISMATCH	8
 
-#define DHD_VERSION "Dongle Host Driver, version " EPI_VERSION_STR
+#define DHD_VERSION "Dongle Host Driver, version " EPI_VERSION_STR "\n"
 
 #if defined(DHD_DEBUG) && defined(DHD_COMPILED)
 const char dhd_version[] = DHD_VERSION DHD_COMPILED " compiled on "

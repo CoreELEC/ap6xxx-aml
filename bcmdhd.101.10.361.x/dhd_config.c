@@ -1330,13 +1330,19 @@ static int
 dhd_conf_iovar_buf(dhd_pub_t *dhd, int ifidx, int cmd, char *name,
 	char *buf, int len)
 {
-	char iovbuf[WLC_IOCTL_MEDLEN];
-	int ret = -1;
+	char *iovbuf = NULL;
+	int ret = -1, iovbuf_len = WLC_IOCTL_MEDLEN;
 	s32 iovar_len;
 
+	iovbuf = kmalloc(iovbuf_len, GFP_KERNEL);
+	if (iovbuf == NULL) {
+		CONFIG_ERROR("Failed to allocate buffer of %d bytes\n", iovbuf_len);
+		goto exit;
+	}
+
 	if (cmd == WLC_GET_VAR) {
-		if (bcm_mkiovar(name, buf, len, iovbuf, sizeof(iovbuf))) {
-			ret = dhd_wl_ioctl_cmd(dhd, cmd, iovbuf, sizeof(iovbuf), FALSE, ifidx);
+		if (bcm_mkiovar(name, buf, len, iovbuf, iovbuf_len)) {
+			ret = dhd_wl_ioctl_cmd(dhd, cmd, iovbuf, iovbuf_len, FALSE, ifidx);
 			if (!ret) {
 				memcpy(buf, iovbuf, len);
 			} else {
@@ -1346,7 +1352,7 @@ dhd_conf_iovar_buf(dhd_pub_t *dhd, int ifidx, int cmd, char *name,
 			CONFIG_ERROR("mkiovar %s failed\n", name);
 		}
 	} else if (cmd == WLC_SET_VAR) {
-		iovar_len = bcm_mkiovar(name, buf, len, iovbuf, sizeof(iovbuf));
+		iovar_len = bcm_mkiovar(name, buf, len, iovbuf, iovbuf_len);
 		if (iovar_len > 0)
 			ret = dhd_wl_ioctl_cmd(dhd, cmd, iovbuf, iovar_len, TRUE, ifidx);
 		else
@@ -1355,6 +1361,9 @@ dhd_conf_iovar_buf(dhd_pub_t *dhd, int ifidx, int cmd, char *name,
 			CONFIG_ERROR("%s setting failed %d, len=%d\n", name, ret, len);
 	}
 
+exit:
+	if (iovbuf)
+		kfree(iovbuf);
 	return ret;
 }
 
@@ -1434,7 +1443,7 @@ dhd_conf_btc_params(dhd_pub_t *dhd, char *cmd, char *buf)
 {
 	int ret = BCME_OK;
 	uint32 cur_val;
-	int index, mask, value;
+	int index = 0, mask = 0, value = 0;
 	// btc_params=[index] [mask] [value]
 	// Ex: btc_params=82 0x0021 0x0001
 
@@ -2670,7 +2679,7 @@ dhd_conf_set_suspend_event(dhd_pub_t *dhd, int suspend)
 					msg.event_type = hton32(WLC_E_DEAUTH_IND);
 					msg.status = 0;
 					msg.reason = hton32(DOT11_RC_DEAUTH_LEAVING);
-#if defined(WL_EXT_IAPSTA) || defined(USE_IW)
+#ifdef WL_EVENT
 					wl_ext_event_send(dhd->event_params, &msg, NULL);
 #endif
 #ifdef WL_CFG80211
@@ -3046,7 +3055,7 @@ dhd_conf_read_log_level(dhd_pub_t *dhd, char *full_param, uint len_param)
 #if defined(DHD_DEBUG)
 	else if (!strncmp("dhd_console_ms=", full_param, len_param)) {
 		dhd->dhd_console_ms = (int)simple_strtol(data, NULL, 0);
-		CONFIG_MSG("dhd_console_ms = 0x%X\n", dhd->dhd_console_ms);
+		CONFIG_MSG("dhd_console_ms = %d\n", dhd->dhd_console_ms);
 	}
 #endif
 	else
@@ -3808,6 +3817,12 @@ dhd_conf_read_sdio_params(dhd_pub_t *dhd, char *full_param, uint len_param)
 		CONFIG_MSG("ramsize = %d\n", conf->ramsize);
 	}
 #endif
+#ifdef BCMSDIO_INTSTATUS_WAR
+	else if (!strncmp("read_intr_mode=", full_param, len_param)) {
+		conf->read_intr_mode = (int)simple_strtol(data, NULL, 0);
+		CONFIG_MSG("read_intr_mode = %d\n", conf->read_intr_mode);
+	}
+#endif
 	else
 		return false;
 
@@ -4065,10 +4080,10 @@ dhd_conf_read_others(dhd_pub_t *dhd, char *full_param, uint len_param)
 			kfree(conf->wl_preinit);
 			conf->wl_preinit = NULL;
 		}
-		if (!(conf->wl_preinit = kmalloc(len_param+1, GFP_KERNEL))) {
+		if (!(conf->wl_preinit = kmalloc(strlen(data)+1, GFP_KERNEL))) {
 			CONFIG_ERROR("kmalloc failed\n");
 		} else {
-			memset(conf->wl_preinit, 0, len_param+1);
+			memset(conf->wl_preinit, 0, strlen(data)+1);
 			strcpy(conf->wl_preinit, data);
 			CONFIG_MSG("wl_preinit = %s\n", conf->wl_preinit);
 		}
@@ -4078,10 +4093,10 @@ dhd_conf_read_others(dhd_pub_t *dhd, char *full_param, uint len_param)
 			kfree(conf->wl_suspend);
 			conf->wl_suspend = NULL;
 		}
-		if (!(conf->wl_suspend = kmalloc(len_param+1, GFP_KERNEL))) {
+		if (!(conf->wl_suspend = kmalloc(strlen(data)+1, GFP_KERNEL))) {
 			CONFIG_ERROR("kmalloc failed\n");
 		} else {
-			memset(conf->wl_suspend, 0, len_param+1);
+			memset(conf->wl_suspend, 0, strlen(data)+1);
 			strcpy(conf->wl_suspend, data);
 			CONFIG_MSG("wl_suspend = %s\n", conf->wl_suspend);
 		}
@@ -4091,10 +4106,10 @@ dhd_conf_read_others(dhd_pub_t *dhd, char *full_param, uint len_param)
 			kfree(conf->wl_resume);
 			conf->wl_resume = NULL;
 		}
-		if (!(conf->wl_resume = kmalloc(len_param+1, GFP_KERNEL))) {
+		if (!(conf->wl_resume = kmalloc(strlen(data)+1, GFP_KERNEL))) {
 			CONFIG_ERROR("kmalloc failed\n");
 		} else {
-			memset(conf->wl_resume, 0, len_param+1);
+			memset(conf->wl_resume, 0, strlen(data)+1);
 			strcpy(conf->wl_resume, data);
 			CONFIG_MSG("wl_resume = %s\n", conf->wl_resume);
 		}
@@ -4127,21 +4142,27 @@ dhd_conf_read_others(dhd_pub_t *dhd, char *full_param, uint len_param)
 #ifdef PROPTX_MAXCOUNT
 	else if (!strncmp("proptx_maxcnt_2g=", full_param, len_param)) {
 		conf->proptx_maxcnt_2g = (int)simple_strtol(data, NULL, 0);
-		CONFIG_MSG("proptx_maxcnt_2g = 0x%x\n", conf->proptx_maxcnt_2g);
+		CONFIG_MSG("proptx_maxcnt_2g = %d\n", conf->proptx_maxcnt_2g);
 	}
 	else if (!strncmp("proptx_maxcnt_5g=", full_param, len_param)) {
 		conf->proptx_maxcnt_5g = (int)simple_strtol(data, NULL, 0);
-		CONFIG_MSG("proptx_maxcnt_5g = 0x%x\n", conf->proptx_maxcnt_5g);
+		CONFIG_MSG("proptx_maxcnt_5g = %d\n", conf->proptx_maxcnt_5g);
 	}
 #endif
 #ifdef HOST_TPUT_TEST
 	else if (!strncmp("data_drop_mode=", full_param, len_param)) {
 		conf->data_drop_mode = (int)simple_strtol(data, NULL, 0);
-		CONFIG_MSG("data_drop_mode = 0x%x\n", conf->data_drop_mode);
+		CONFIG_MSG("data_drop_mode = %d\n", conf->data_drop_mode);
 	}
 	else if (!strncmp("tput_measure_ms=", full_param, len_param)) {
 		conf->tput_measure_ms= (int)simple_strtol(data, NULL, 0);
-		CONFIG_MSG("tput_measure_ms = 0x%x\n", conf->tput_measure_ms);
+		CONFIG_MSG("tput_measure_ms = %d\n", conf->tput_measure_ms);
+	}
+#endif
+#ifdef TPUT_MONITOR
+	else if (!strncmp("tput_monitor_ms=", full_param, len_param)) {
+		conf->tput_monitor_ms = (int)simple_strtol(data, NULL, 0);
+		CONFIG_MSG("tput_monitor_ms = %d\n", conf->tput_monitor_ms);
 	}
 #endif
 #ifdef DHD_TPUT_PATCH
@@ -4681,6 +4702,9 @@ dhd_conf_preinit(dhd_pub_t *dhd)
 #if defined(HW_OOB)
 	conf->oob_enabled_later = FALSE;
 #endif
+#ifdef BCMSDIO_INTSTATUS_WAR
+	conf->read_intr_mode = 0;
+#endif
 #endif
 #ifdef BCMPCIE
 	conf->bus_deepsleep_disable = 1;
@@ -4743,6 +4767,9 @@ dhd_conf_preinit(dhd_pub_t *dhd)
 #ifdef HOST_TPUT_TEST
 	conf->data_drop_mode = 0;
 	conf->tput_measure_ms = 0;
+#endif
+#ifdef TPUT_MONITOR
+	conf->tput_monitor_ms = 0;
 #endif
 #ifdef DHD_TPUT_PATCH
 	conf->tput_patch = FALSE;
