@@ -59,6 +59,7 @@
 #include <bcmsdh_sdmmc.h>
 #include <dhd_dbg.h>
 #include <bcmdevs.h>
+#include <bcmdevs_legacy.h>
 
 #if !defined(SDIO_VENDOR_ID_BROADCOM)
 #define SDIO_VENDOR_ID_BROADCOM		0x02d0
@@ -233,6 +234,7 @@ static const struct sdio_device_id bcmsdh_sdmmc_ids[] = {
 	 * Need to add IDs for the FALCON-based chips and put this under BCMINTERNAL
 	 { SDIO_DEVICE_CLASS(SDIO_CLASS_NONE) },
 	 */
+	{ SDIO_DEVICE(SDIO_VENDOR_ID_BROADCOM, BCM4354_CHIP_ID) },
 	{ SDIO_DEVICE(SDIO_VENDOR_ID_BROADCOM, BCM4362_CHIP_ID) },
 	{ SDIO_DEVICE(SDIO_VENDOR_ID_BROADCOM, BCM43751_CHIP_ID) },
 	{ SDIO_DEVICE(SDIO_VENDOR_ID_BROADCOM, BCM43752_CHIP_ID) },
