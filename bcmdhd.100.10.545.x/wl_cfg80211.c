@@ -19646,7 +19646,7 @@ s32 wl_cfg80211_get_p2p_dev_addr(struct net_device *net, struct ether_addr *p2pd
 #ifndef WL_P2P_USE_RANDMAC
 		wl_cfgp2p_generate_bss_mac(cfg, &primary_mac);
 #endif /* WL_P2P_USE_RANDMAC */
-		memcpy((void *)&p2pdev_addr, (void *)&primary_mac, ETHER_ADDR_LEN);
+		memcpy(p2pdev_addr, (void *)&primary_mac, ETHER_ADDR_LEN);
 	} else {
 		memcpy(p2pdev_addr->octet, wl_to_p2p_bss_macaddr(cfg, P2PAPI_BSSCFG_DEVICE).octet,
 			ETHER_ADDR_LEN);
