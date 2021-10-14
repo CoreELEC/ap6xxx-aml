@@ -1127,6 +1127,7 @@ osl_dma_alloc_consistent(osl_t *osh, uint size, uint16 align_bits, uint *alloced
 	{
 		dma_addr_t pap_lin;
 		struct pci_dev *hwdev = osh->pdev;
+		struct device *dev = &hwdev->dev;
 		gfp_t flags;
 #ifdef DHD_ALLOC_COHERENT_MEM_FROM_ATOMIC_POOL
 		flags = GFP_ATOMIC;
@@ -1136,7 +1137,11 @@ osl_dma_alloc_consistent(osl_t *osh, uint size, uint16 align_bits, uint *alloced
 #ifdef DHD_ALLOC_COHERENT_MEM_WITH_GFP_COMP
 		flags |= __GFP_COMP;
 #endif /* DHD_ALLOC_COHERENT_MEM_WITH_GFP_COMP */
-		va = dma_alloc_coherent(&hwdev->dev, size, &pap_lin, flags);
+#ifdef CUSTOMER_HW_AMLOGIC
+		if (g_pcie_reserved_mem_dev)
+			dev = g_pcie_reserved_mem_dev;
+#endif
+		va = dma_alloc_coherent(dev, size, &pap_lin, flags);
 #ifdef BCMDMA64OSL
 		PHYSADDRLOSET(*pap, pap_lin & 0xffffffff);
 		PHYSADDRHISET(*pap, (pap_lin >> 32) & 0xffffffff);

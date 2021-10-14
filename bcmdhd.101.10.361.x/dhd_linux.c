@@ -17441,6 +17441,11 @@ dhd_module_exit(void)
 #endif /* DHD_PKTTS */
 }
 
+#ifdef CUSTOMER_HW_AMLOGIC
+extern struct device *get_pcie_reserved_mem_dev(void);
+struct device * g_pcie_reserved_mem_dev;
+#endif
+
 static int
 _dhd_module_init(void)
 {
@@ -17449,6 +17454,13 @@ _dhd_module_init(void)
 
 	printf("%s: in %s\n", __FUNCTION__, dhd_version);
 #ifdef CUSTOMER_HW_AMLOGIC
+
+#ifdef USE_AML_PCIE_TEE_MEM
+	g_pcie_reserved_mem_dev = get_pcie_reserved_mem_dev();
+	if (g_pcie_reserved_mem_dev)
+		printf("#######use amlogic pcie TEE protect mem#######\n");
+#endif
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0))
 	if (wifi_setup_dt()) {
 		printf("wifi_dt : fail to setup dt\n");

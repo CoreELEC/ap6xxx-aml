@@ -162,7 +162,11 @@ extern char fw_version[];
 #endif
 #endif /* BCM_HOST_BUF */
 
+#if defined(CUSTOMER_HW_AMLOGIC) && defined(USE_AML_PCIE_TEE_MEM)
+#define DHD_FLOWRING_IOCTL_BUFPOST_PKTSZ		4096
+#else
 #define DHD_FLOWRING_IOCTL_BUFPOST_PKTSZ		8192
+#endif
 
 #define DHD_FLOWRING_DEFAULT_NITEMS_POSTED_H2D		1
 #define DHD_FLOWRING_MAX_EVENTBUF_POST			32
