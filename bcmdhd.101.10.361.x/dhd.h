@@ -410,7 +410,9 @@ typedef enum download_type {
 
 /* For supporting multiple interfaces */
 #define DHD_MAX_IFS			16
+#ifndef DHD_MAX_STATIC_IFS
 #define DHD_MAX_STATIC_IFS	1
+#endif
 #define DHD_DEL_IF			-0xE
 #define DHD_BAD_IF			-0xF
 #define DHD_DUMMY_INFO_IF	0xDEAF	/* Hack i/f to handle events from INFO Ring */
@@ -2393,21 +2395,22 @@ extern struct mutex _dhd_mutex_lock_;
 #define DHD_MUTEX_IS_LOCK_RETURN() \
 	if (mutex_is_locked(&_dhd_mutex_lock_) != 0) { \
 		printf("%s : probe is already running! return.\n", __FUNCTION__); \
-		return 0; \
+		return -EBUSY;; \
 	}
 #define DHD_MUTEX_LOCK() \
 	do { \
 		if (mutex_is_locked(&_dhd_mutex_lock_) == 0) { \
-			printf("%s : no mutex held. set lock\n", __FUNCTION__); \
+			printf("%s : no mutex held\n", __FUNCTION__); \
 		} else { \
 			printf("%s : mutex is locked!. wait for unlocking\n", __FUNCTION__); \
 		} \
 		mutex_lock(&_dhd_mutex_lock_); \
+		printf("%s : set mutex lock\n", __FUNCTION__); \
 	} while (0)
 #define DHD_MUTEX_UNLOCK() \
 	do { \
+		printf("%s : mutex is released.\n", __FUNCTION__); \
 		mutex_unlock(&_dhd_mutex_lock_); \
-		printf("%s : the lock is released.\n", __FUNCTION__); \
 	} while (0)
 #else
 #define DHD_MUTEX_IS_LOCK_RETURN(a)	do {} while (0)

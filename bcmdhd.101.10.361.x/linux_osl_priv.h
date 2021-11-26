@@ -180,6 +180,9 @@ struct osl_info {
 	void *dhd_map_log;
 	void *dhd_unmap_log;
 #endif /* DHD_MAP_LOGGING */
+#if defined(CUSTOMER_HW_AMLOGIC) && defined(USE_AML_PCIE_TEE_MEM)
+	struct device *tee_mem_dev;
+#endif /* CUSTOMER_HW_AMLOGIC && USE_AML_PCIE_TEE_MEM */
 };
 
 #endif /* _LINUX_OSL_PRIV_H_ */

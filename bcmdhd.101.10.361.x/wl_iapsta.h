@@ -67,6 +67,7 @@ enum wl_ext_status {
 	WL_EXT_STATUS_DISCONNECTING = 0,
 	WL_EXT_STATUS_DISCONNECTED,
 	WL_EXT_STATUS_SCAN,
+	WL_EXT_STATUS_SCANNING,
 	WL_EXT_STATUS_CONNECTING,
 	WL_EXT_STATUS_CONNECTED,
 	WL_EXT_STATUS_ADD_KEY,
@@ -95,10 +96,17 @@ typedef struct wl_if_info {
 	authmode_t amode;
 	encmode_t emode;
 	char key[100];
-#if defined(WLMESH) && defined(WL_ESCAN)
+#ifdef WL_ESCAN
+#if (defined(WLMESH) || defined(ACS_MONITOR))
 	struct wl_escan_info *escan;
+#ifdef WLMESH
 	timer_list_compat_t delay_scan;
-#endif /* WLMESH && WL_ESCAN */
+#endif /* WLMESH */
+#ifdef ACS_MONITOR
+	timer_list_compat_t acs_timer;
+#endif /* ACS_MONITOR */
+#endif /* WLMESH || ACS_MONITOR */
+#endif /* WL_ESCAN */
 	struct delayed_work pm_enable_work;
 	struct mutex pm_sync;
 #ifdef PROPTX_MAXCOUNT
@@ -110,6 +118,11 @@ typedef struct wl_if_info {
 #ifdef TPUT_MONITOR
 	unsigned long last_tx;
 	unsigned long last_rx;
+	struct osl_timespec tput_ts;
+	int32 tput_tx;
+	int32 tput_rx;
+	int32 tput_tx_kb;
+	int32 tput_rx_kb;
 #endif /* TPUT_MONITOR */
 } wl_if_info_t;
 
@@ -122,6 +135,9 @@ typedef struct wl_apsta_params {
 	bool vsdb;
 	uint csa;
 	uint acs;
+#ifdef ACS_MONITOR
+	uint acs_tmo;
+#endif /* ACS_MONITOR */
 	bool radar;
 	apstamode_t apstamode;
 	wait_queue_head_t netif_change_event;
@@ -139,22 +155,28 @@ typedef struct wl_apsta_params {
 	struct ether_addr ap_disc_sta_bssid;
 	struct osl_timespec ap_disc_sta_ts;
 #ifdef TPUT_MONITOR
-	struct osl_timespec tput_ts;
 	timer_list_compat_t monitor_timer;
+	int32 tput_sum;
+	int32 tput_sum_kb;
 #endif /* TPUT_MONITOR */
+#ifdef SCAN_SUPPRESS
+	struct osl_timespec scan_busy_ts;
+	int scan_busy_cnt;
+#endif /* SCAN_SUPPRESS */
 } wl_apsta_params_t;
 
 extern int op_mode;
 void wl_ext_update_eapol_status(dhd_pub_t *dhd, int ifidx,
 	uint eapol_status);
+void wl_ext_iapsta_get_vif_macaddr(struct dhd_pub *dhd, int ifidx, u8 *mac_addr);
 int wl_ext_iapsta_attach_netdev(struct net_device *net, int ifidx, uint8 bssidx);
 int wl_ext_iapsta_attach_name(struct net_device *net, int ifidx);
 int wl_ext_iapsta_dettach_netdev(struct net_device *net, int ifidx);
 int wl_ext_iapsta_update_net_device(struct net_device *net, int ifidx);
 int wl_ext_iapsta_alive_preinit(struct net_device *dev);
 int wl_ext_iapsta_alive_postinit(struct net_device *dev);
-int wl_ext_iapsta_attach(dhd_pub_t *pub);
-void wl_ext_iapsta_dettach(dhd_pub_t *pub);
+int wl_ext_iapsta_attach(struct net_device *net);
+void wl_ext_iapsta_dettach(struct net_device *net);
 int wl_ext_iapsta_enable(struct net_device *dev, char *command, int total_len);
 int wl_ext_iapsta_disable(struct net_device *dev, char *command, int total_len);
 int wl_ext_isam_param(struct net_device *dev, char *command, int total_len);
@@ -162,18 +184,41 @@ int wl_ext_isam_status(struct net_device *dev, char *command, int total_len);
 int wl_ext_isam_init(struct net_device *dev, char *command, int total_len);
 int wl_ext_iapsta_config(struct net_device *dev, char *command, int total_len);
 void wl_ext_add_remove_pm_enable_work(struct net_device *dev, bool add);
+bool wl_ext_iapsta_other_if_enabled(struct net_device *net);
+#ifdef WL_CFG80211
+int wl_ext_in4way_sync(struct net_device *dev, uint action,
+	enum wl_ext_status status, void *context);
+void wl_ext_update_extsae_4way(struct net_device *dev,
+	const struct ieee80211_mgmt *mgmt, bool tx);
+#endif /* WL_CFG80211 */
+#ifdef USE_IW
+int wl_ext_in4way_sync_wext(struct net_device *dev, uint action,
+	enum wl_ext_status status, void *context);
+#endif /* USE_IW */
+#ifdef WLMESH
+int wl_ext_mesh_peer_status(struct net_device *dev, char *data, char *command,
+	int total_len);
+int wl_ext_isam_peer_path(struct net_device *dev, char *command, int total_len);
+#endif
 #ifdef WL_CFG80211
 u32 wl_ext_iapsta_update_channel(dhd_pub_t *dhd, struct net_device *dev, u32 channel);
 void wl_ext_iapsta_update_iftype(struct net_device *net, int ifidx, int wl_iftype);
 bool wl_ext_iapsta_iftype_enabled(struct net_device *net, int wl_iftype);
-bool wl_ext_iapsta_other_if_enabled(struct net_device *net);
 void wl_ext_iapsta_enable_master_if(struct net_device *dev, bool post);
 void wl_ext_iapsta_restart_master(struct net_device *dev);
 void wl_ext_iapsta_ifadding(struct net_device *net, int ifidx);
 bool wl_ext_iapsta_mesh_creating(struct net_device *net);
+#ifdef SCAN_SUPPRESS
+void wl_ext_populate_scan_channel(dhd_pub_t *dhd, u16 *channel_list,
+	u32 channel, u32 n_channels);
+uint16 wl_ext_scan_suppress(struct net_device *dev, void *scan_params, bool scan_v2);
+#endif /* SCAN_SUPPRESS */
 #endif
 #ifdef PROPTX_MAXCOUNT
 int wl_ext_get_wlfc_maxcount(struct dhd_pub *dhd, int ifidx);
 #endif /* PROPTX_MAXCOUNT */
+#ifdef TPUT_MONITOR
+void wl_tput_monitor_set_timer(dhd_pub_t *dhd, uint sec, uint msec);
+#endif /* TPUT_MONITOR */
 #endif
 

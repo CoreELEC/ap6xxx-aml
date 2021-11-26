@@ -1112,9 +1112,9 @@ wl_cfgp2p_escan(struct bcm_cfg80211 *cfg, struct net_device *dev, u16 active_sca
 	}
 	CFGP2P_DBG(("\n"));
 
+	WL_MSG(dev->name, "P2P_SEARCH sync ID: %d, bssidx: %d\n", sync_id, bssidx);
 	ret = wldev_iovar_setbuf_bsscfg(pri_dev, "p2p_scan",
 		memblk, memsize, cfg->ioctl_buf, WLC_IOCTL_MAXLEN, bssidx, &cfg->ioctl_buf_sync);
-	WL_MSG(dev->name, "P2P_SEARCH sync ID: %d, bssidx: %d\n", sync_id, bssidx);
 	if (ret == BCME_OK) {
 		wl_set_p2p_status(cfg, SCANNING);
 	}
@@ -2623,7 +2623,6 @@ wl_cfgp2p_add_p2p_disc_if(struct bcm_cfg80211 *cfg)
 	cfg->p2p_wdev = wdev;
 
 	printf("P2P interface registered\n");
-	printf("%s: wdev: %p, wdev->net: %p\n", __FUNCTION__, wdev, wdev->netdev);
 	return wdev;
 }
 

@@ -73,6 +73,8 @@
 #ifdef DHD_PKTDUMP_TOFW
 #include <dhd_linux_pktdump.h>
 #endif
+#include <linux/mmc/sdio_func.h>
+#include <dhd_linux.h>
 
 #ifdef PROP_TXSTATUS
 #include <dhd_wlfc.h>
@@ -1194,9 +1196,22 @@ dhdsdio_clk_kso_enab(dhd_bus_t *bus, bool on)
 {
 	uint8 wr_val = 0, rd_val, cmp_val, bmask;
 	int err = 0;
-	int try_cnt = 0;
+	int try_cnt = 0, try_max = CUSTOM_MAX_KSO_ATTEMPTS;
+	struct dhd_conf *conf = bus->dhd->conf;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0))
+	wifi_adapter_info_t *adapter = NULL;
+	uint32 bus_type = -1, bus_num = -1, slot_num = -1;
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0) */
 
 	KSO_DBG(("%s> op:%s\n", __FUNCTION__, (on ? "KSO_SET" : "KSO_CLR")));
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0))
+	dhd_bus_get_ids(bus, &bus_type, &bus_num, &slot_num);
+	adapter = dhd_wifi_platform_get_adapter(bus_type, bus_num, slot_num);
+	sdio_retune_crc_disable(adapter->sdio_func);
+	if (on)
+		sdio_retune_hold_now(adapter->sdio_func);
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0) */
 
 	wr_val |= (on << SBSDIO_FUNC1_SLEEPCSR_KSO_SHIFT);
 
@@ -1210,7 +1225,7 @@ dhdsdio_clk_kso_enab(dhd_bus_t *bus, bool on)
 	if ((!on) && (bus->sih->chip == BCM43012_CHIP_ID ||
 		bus->sih->chip == BCM43013_CHIP_ID ||
 		bus->sih->chip == BCM43014_CHIP_ID)) {
-		return err;
+		goto exit;
 	}
 
 	if (on) {
@@ -1253,6 +1268,8 @@ dhdsdio_clk_kso_enab(dhd_bus_t *bus, bool on)
 	 * hangs if chip is a sleep during read or write.
 	 */
 
+	if (conf->kso_try_max)
+		try_max = conf->kso_try_max;
 	do {
 		/*
 		 *  XXX reliable KSO bit set/clr:
@@ -1272,17 +1289,56 @@ dhdsdio_clk_kso_enab(dhd_bus_t *bus, bool on)
 			OSL_DELAY(KSO_WAIT_US);
 
 		bcmsdh_cfg_write(bus->sdh, SDIO_FUNC_1, SBSDIO_FUNC1_SLEEPCSR, wr_val, &err);
-	} while (try_cnt++ < CUSTOM_MAX_KSO_ATTEMPTS);
+	} while (try_cnt++ < try_max);
 
+#ifdef KSO_DEBUG
+	if (try_cnt > 0 && try_cnt <= 10)
+		conf->kso_try_array[0] += 1;
+	else if (try_cnt <= 50)
+		conf->kso_try_array[1] += 1;
+	else if (try_cnt <= 100)
+		conf->kso_try_array[2] += 1;
+	else if (try_cnt <= 200)
+		conf->kso_try_array[3] += 1;
+	else if (try_cnt <= 500)
+		conf->kso_try_array[4] += 1;
+	else if (try_cnt <= 1000)
+		conf->kso_try_array[5] += 1;
+	else if (try_cnt <= 2000)
+		conf->kso_try_array[6] += 1;
+	else if (try_cnt <= 5000)
+		conf->kso_try_array[7] += 1;
+	else if (try_cnt <= 10000)
+		conf->kso_try_array[8] += 1;
+	else
+		conf->kso_try_array[9] += 1;
+#endif
 	if (try_cnt > 2)
 		KSO_DBG(("%s> op:%s, try_cnt:%d, rd_val:%x, ERR:%x \n",
 			__FUNCTION__, (on ? "KSO_SET" : "KSO_CLR"), try_cnt, rd_val, err));
 
-	if (try_cnt > CUSTOM_MAX_KSO_ATTEMPTS)  {
+	if (try_cnt > try_max)  {
 		DHD_ERROR(("%s> op:%s, ERROR: try_cnt:%d, rd_val:%x, ERR:%x \n",
 			__FUNCTION__, (on ? "KSO_SET" : "KSO_CLR"), try_cnt, rd_val, err));
+#ifdef KSO_DEBUG
+		{
+			int i;
+			printk(KERN_CONT DHD_LOG_PREFIXS);
+			for (i=0; i<10; i++) {
+				printk(KERN_CONT "[%d]: %d, ", i, conf->kso_try_array[i]);
+		 	}
+			printk("\n");
+		}
+#endif
 	}
 #endif /* !defined(NDIS) */
+
+exit:
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0))
+	if (on)
+		sdio_retune_release(adapter->sdio_func);
+	sdio_retune_crc_enable(adapter->sdio_func);
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0) */
 
 	return err;
 }
@@ -2775,21 +2831,15 @@ static int dhdsdio_txpkt(dhd_bus_t *bus, uint chan, void** pkts, int num_pkt, bo
 	 * so it will take the aligned length and buffer pointer.
 	 */
 	pkt_chain = PKTNEXT(osh, head_pkt) ? head_pkt : NULL;
-#ifdef HOST_TPUT_TEST
-	if ((bus->dhd->conf->data_drop_mode == TXPKT_DROP) && (total_len > 500)) {
+#ifdef TPUT_MONITOR
+	if ((bus->dhd->conf->data_drop_mode == TXPKT_DROP) && (total_len > 500))
 		ret = BCME_OK;
-	} else {
-		ret = dhd_bcmsdh_send_buf(bus, bcmsdh_cur_sbwad(sdh), SDIO_FUNC_2, F2SYNC,
-			PKTDATA(osh, head_pkt), total_len, pkt_chain, NULL, NULL, TXRETRIES);
-		if (ret == BCME_OK)
-			bus->tx_seq = (bus->tx_seq + num_pkt) % SDPCM_SEQUENCE_WRAP;
-	}
-#else
+	else
+#endif
 	ret = dhd_bcmsdh_send_buf(bus, bcmsdh_cur_sbwad(sdh), SDIO_FUNC_2, F2SYNC,
 		PKTDATA(osh, head_pkt), total_len, pkt_chain, NULL, NULL, TXRETRIES);
 	if (ret == BCME_OK)
 		bus->tx_seq = (bus->tx_seq + num_pkt) % SDPCM_SEQUENCE_WRAP;
-#endif
 
 	/* if a padding packet was needed, remove it from the link list as it not a data pkt */
 	if (pad_pkt_len && pkt)
@@ -8007,8 +8057,8 @@ exit:
 		}
 	}
 
-#ifdef HOST_TPUT_TEST
-	dhd_conf_tput_measure(bus->dhd);
+#ifdef TPUT_MONITOR
+	dhd_conf_tput_monitor(bus->dhd);
 #endif
 
 	if (bus->ctrl_wait && TXCTLOK(bus))
@@ -8121,10 +8171,12 @@ dhdsdio_isr(void *arg)
 }
 
 #ifdef PKT_STATICS
-void dhd_bus_dump_txpktstatics(struct dhd_bus *bus)
+void
+dhd_bus_dump_txpktstatics(dhd_pub_t *dhdp)
 {
-	uint i;
+	dhd_bus_t *bus = dhdp->bus;
 	uint32 total = 0;
+	uint i;
 
 	printf("%s: TYPE EVENT: %d pkts (size=%d) transfered\n",
 		__FUNCTION__, bus->tx_statics.event_count, bus->tx_statics.event_size);
@@ -8179,10 +8231,21 @@ void dhd_bus_dump_txpktstatics(struct dhd_bus *bus)
 		__FUNCTION__, bus->tx_statics.glom_count, bus->tx_statics.glom_size);
 	printf("%s: TYPE TEST: %d pkts (size=%d) transfered\n",
 		__FUNCTION__, bus->tx_statics.test_count, bus->tx_statics.test_size);
+
+#ifdef KSO_DEBUG
+	printf("%s: kso try distribution(us):\n", __FUNCTION__);
+	printk(KERN_CONT DHD_LOG_PREFIXS);
+	for (i=0; i<10; i++) {
+		printk(KERN_CONT "[%d]: %d, ", i, dhdp->conf->kso_try_array[i]);
+ 	}
+	printk("\n");
+#endif
 }
 
-void dhd_bus_clear_txpktstatics(struct dhd_bus *bus)
+void
+dhd_bus_clear_txpktstatics(dhd_pub_t *dhdp)
 {
+	dhd_bus_t *bus = dhdp->bus;
 	memset((uint8*) &bus->tx_statics, 0, sizeof(pkt_statics_t));
 }
 #endif
@@ -9647,7 +9710,7 @@ dhdsdio_probe_init(dhd_bus_t *bus, osl_t *osh, void *sdh)
 	bus->dotxinrx = TRUE;
 
 #ifdef PKT_STATICS
-	dhd_bus_clear_txpktstatics(bus);
+	dhd_bus_clear_txpktstatics(bus->dhd);
 #endif
 
 	return TRUE;
@@ -10243,7 +10306,8 @@ dhdsdio_download_code_file(struct dhd_bus *bus, char *pfw_path)
 				goto err;
 			}
 			if (memcmp(memptr_tmp, memptr, len)) {
-				DHD_ERROR(("%s: Downloaded image is corrupted.\n", __FUNCTION__));
+				DHD_ERROR(("%s: Downloaded image is corrupted at 0x%08x\n", __FUNCTION__, offset));
+				bcmerror = BCME_ERROR;
 				goto err;
 			} else
 				DHD_INFO(("%s: Download, Upload and compare succeeded.\n", __FUNCTION__));
@@ -10855,7 +10919,7 @@ dhd_bus_devreset(dhd_pub_t *dhdp, uint8 flag)
 	}
 
 #ifdef PKT_STATICS
-	dhd_bus_clear_txpktstatics(bus);
+	dhd_bus_clear_txpktstatics(dhdp);
 #endif
 	return bcmerror;
 }

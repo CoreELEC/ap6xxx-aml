@@ -2084,11 +2084,6 @@ int dhdpcie_init(struct pci_dev *pdev)
 		}
 #endif /* USE_SMMU_ARCH_MSM */
 
-#ifdef CUSTOMER_HW_AMLOGIC
-		if (g_pcie_reserved_mem_dev)
-			pdev->dev.dma_mask = NULL;
-#endif
-
 #ifdef DHD_WAKE_STATUS
 		/* Initialize pkt_wake_lock */
 		spin_lock_init(&dhdpcie_info->pkt_wake_lock);

@@ -96,6 +96,9 @@ struct sdioh_info {
 	uint		sd_clk_rate;
 	uint	txglom_mode;		/* Txglom mode: 0 - copy, 1 - multi-descriptor */
 	uint32	sdio_spent_time_us;
+#if !defined(OOB_INTR_ONLY)
+	struct mutex claim_host_mutex; // terence 20140926: fix for claim host issue
+#endif
 };
 
 /************************************************************

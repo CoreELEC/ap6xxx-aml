@@ -67,15 +67,6 @@ uint dump_msg_level = 0;
 #define MAXSZ_BUF		4096
 #define MAXSZ_CONFIG	8192
 
-#ifndef WL_CFG80211
-#define htod32(i) i
-#define htod16(i) i
-#define dtoh32(i) i
-#define dtoh16(i) i
-#define htodchanspec(i) i
-#define dtohchanspec(i) i
-#endif
-
 #if defined(BCMSDIO) && defined(DYNAMIC_MAX_HDR_READ)
 extern uint firstread;
 #endif
@@ -1094,31 +1085,42 @@ dhd_conf_set_conf_name_by_chip(dhd_pub_t *dhd, char *conf_path)
 }
 #endif
 
-#ifdef HOST_TPUT_TEST
+#ifdef TPUT_MONITOR
 void
-dhd_conf_tput_measure(dhd_pub_t *dhd)
+dhd_conf_tput_monitor(dhd_pub_t *dhd)
 {
 	struct dhd_conf *conf = dhd->conf;
 
-	if (conf->tput_measure_ms) {
+	if (conf->tput_monitor_ms && conf->data_drop_mode >= FW_DROP) {
 		if (conf->tput_ts.tv_sec == 0 && conf->tput_ts.tv_nsec == 0) {
 			osl_do_gettimeofday(&conf->tput_ts);
 		} else {
 			struct osl_timespec cur_ts;
+			int32 tput_tx, tput_rx;
 			uint32 diff_ms;
-			int32 tx_tput = 0, rx_tput = 0, net_tput = 0;
-			static unsigned long last_tx = 0, last_rx = 0, last_net_tx = 0;
+			unsigned long diff_bytes;
 			osl_do_gettimeofday(&cur_ts);
 			diff_ms = osl_do_gettimediff(&cur_ts, &conf->tput_ts)/1000;
-			if (diff_ms >= conf->tput_measure_ms) {
-				tx_tput = (int32)(((dhd->dstats.tx_bytes-last_tx)/1024/1024)*8)*1000/diff_ms;
-				rx_tput = (int32)(((dhd->dstats.rx_bytes-last_rx)/1024/1024)*8)*1000/diff_ms;
-				net_tput = (int32)(((conf->net_len-last_net_tx)/1024/1024)*8)*1000/diff_ms;
-				last_tx = dhd->dstats.tx_bytes;
-				last_rx = dhd->dstats.rx_bytes;
-				last_net_tx = conf->net_len;
+			if (diff_ms >= conf->tput_monitor_ms) {
+				diff_bytes = dhd->dstats.tx_bytes-conf->last_tx;
+				tput_tx = (int32)((diff_bytes/1024/1024)*8)*1000/diff_ms;
+				if (tput_tx == 0)
+					tput_tx = (int32)(diff_bytes*8/1024/1024)*1000/diff_ms;
+				diff_bytes = dhd->dstats.rx_bytes-conf->last_rx;
+				tput_rx = (int32)((diff_bytes/1024/1024)*8)*1000/diff_ms;
+				if (tput_rx == 0)
+					tput_rx = (int32)(diff_bytes*8/1024/1024)*1000/diff_ms;
+				diff_bytes = conf->net_len-conf->last_net_tx;
+				conf->tput_net = (int32)((diff_bytes/1024/1024)*8)*1000/diff_ms;
+				if (conf->tput_net == 0)
+					conf->tput_net = (int32)(diff_bytes*8/1024/1024)*1000/diff_ms;
+				conf->last_tx = dhd->dstats.tx_bytes;
+				conf->last_rx = dhd->dstats.rx_bytes;
+				conf->last_net_tx = conf->net_len;
+				conf->tput_bus = tput_tx + tput_rx;
 				memcpy(&conf->tput_ts, &cur_ts, sizeof(struct osl_timespec));
-				CONFIG_TRACE("xmit=%dMbps, tx=%dMbps, rx=%dMbps\n", net_tput, tx_tput, rx_tput);
+				CONFIG_TRACE("xmit=%dMbps, tx=%dMbps, rx=%dMbps\n",
+					conf->tput_net, tput_tx, tput_rx);
 			}
 		}
 	}
@@ -1136,7 +1138,12 @@ dhd_conf_set_tput_patch(dhd_pub_t *dhd)
 		conf->pktsetsum = TRUE;
 #ifdef BCMSDIO
 		conf->dhd_dpc_prio = 98;
-		conf->disable_proptx = 1;
+/* need to check if CPU can support multi-core first,
+ * so don't enable it by default.
+ */
+//		conf->dpc_cpucore = 2;
+//		conf->rxf_cpucore = 3;
+//		conf->disable_proptx = 1;
 		conf->frameburst = 1;
 #ifdef DYNAMIC_MAX_HDR_READ
 		conf->max_hdr_read = 256;
@@ -2746,6 +2753,9 @@ dhd_conf_set_suspend_resume(dhd_pub_t *dhd, int suspend)
 	}
 
 	if (suspend) {
+#ifdef TPUT_MONITOR
+		wl_tput_monitor_set_timer(dhd, 0, 0);
+#endif /* TPUT_MONITOR */
 		if (dhd->op_mode & DHD_FLAG_STA_MODE) {
 			dhd_conf_set_intiovar(dhd, WLC_SET_VAR, "roam_off",
 				dhd->conf->roam_off_suspend, 0, FALSE);
@@ -2860,6 +2870,9 @@ dhd_conf_set_suspend_resume(dhd_pub_t *dhd, int suspend)
 			dhd_conf_set_intiovar(dhd, WLC_SET_PM, "WLC_SET_PM", pm, 0, FALSE);
 		}
 		conf->suspended = FALSE;
+#ifdef TPUT_MONITOR
+		wl_tput_monitor_set_timer(dhd, 0, conf->tput_monitor_ms);
+#endif /* TPUT_MONITOR */
 	}
 
 	return 0;
@@ -3823,6 +3836,10 @@ dhd_conf_read_sdio_params(dhd_pub_t *dhd, char *full_param, uint len_param)
 		CONFIG_MSG("read_intr_mode = %d\n", conf->read_intr_mode);
 	}
 #endif
+	else if (!strncmp("kso_try_max=", full_param, len_param)) {
+		conf->kso_try_max = (int)simple_strtol(data, NULL, 0);
+		CONFIG_MSG("kso_try_max = %d\n", conf->kso_try_max);
+	}
 	else
 		return false;
 
@@ -4075,6 +4092,10 @@ dhd_conf_read_others(dhd_pub_t *dhd, char *full_param, uint len_param)
 		conf->in4way = (int)simple_strtol(data, NULL, 0);
 		CONFIG_MSG("in4way = 0x%x\n", conf->in4way);
 	}
+	else if (!strncmp("war=", full_param, len_param)) {
+		conf->war = (int)simple_strtol(data, NULL, 0);
+		CONFIG_MSG("war = 0x%x\n", conf->war);
+	}
 	else if (!strncmp("wl_preinit=", full_param, len_param)) {
 		if (conf->wl_preinit) {
 			kfree(conf->wl_preinit);
@@ -4149,20 +4170,32 @@ dhd_conf_read_others(dhd_pub_t *dhd, char *full_param, uint len_param)
 		CONFIG_MSG("proptx_maxcnt_5g = %d\n", conf->proptx_maxcnt_5g);
 	}
 #endif
-#ifdef HOST_TPUT_TEST
+#ifdef TPUT_MONITOR
 	else if (!strncmp("data_drop_mode=", full_param, len_param)) {
 		conf->data_drop_mode = (int)simple_strtol(data, NULL, 0);
 		CONFIG_MSG("data_drop_mode = %d\n", conf->data_drop_mode);
 	}
-	else if (!strncmp("tput_measure_ms=", full_param, len_param)) {
-		conf->tput_measure_ms= (int)simple_strtol(data, NULL, 0);
-		CONFIG_MSG("tput_measure_ms = %d\n", conf->tput_measure_ms);
-	}
-#endif
-#ifdef TPUT_MONITOR
 	else if (!strncmp("tput_monitor_ms=", full_param, len_param)) {
 		conf->tput_monitor_ms = (int)simple_strtol(data, NULL, 0);
 		CONFIG_MSG("tput_monitor_ms = %d\n", conf->tput_monitor_ms);
+	}
+#endif
+#ifdef SCAN_SUPPRESS
+	else if (!strncmp("scan_intput=", full_param, len_param)) {
+		conf->scan_intput = (int)simple_strtol(data, NULL, 0);
+		CONFIG_MSG("scan_intput = 0x%x\n", conf->scan_intput);
+	}
+	else if (!strncmp("scan_tput_thresh=", full_param, len_param)) {
+		conf->scan_tput_thresh = (int)simple_strtol(data, NULL, 0);
+		CONFIG_MSG("scan_tput_thresh = %d\n", conf->scan_tput_thresh);
+	}
+	else if (!strncmp("scan_busy_tmo=", full_param, len_param)) {
+		conf->scan_busy_tmo = (int)simple_strtol(data, NULL, 0);
+		CONFIG_MSG("scan_busy_tmo = %d\n", conf->scan_busy_tmo);
+	}
+	else if (!strncmp("scan_busy_thresh=", full_param, len_param)) {
+		conf->scan_busy_thresh = (int)simple_strtol(data, NULL, 0);
+		CONFIG_MSG("scan_busy_thresh = %d\n", conf->scan_busy_thresh);
 	}
 #endif
 #ifdef DHD_TPUT_PATCH
@@ -4213,6 +4246,19 @@ dhd_conf_read_others(dhd_pub_t *dhd, char *full_param, uint len_param)
 		CONFIG_MSG("fwchk = %d\n", conf->fwchk);
 	}
 #endif
+	else if (!strncmp("vndr_ie_assocreq=", full_param, len_param)) {
+		if (conf->vndr_ie_assocreq) {
+			kfree(conf->vndr_ie_assocreq);
+			conf->vndr_ie_assocreq = NULL;
+		}
+		if (!(conf->vndr_ie_assocreq = kmalloc(strlen(data)+1, GFP_KERNEL))) {
+			CONFIG_ERROR("kmalloc failed\n");
+		} else {
+			memset(conf->vndr_ie_assocreq, 0, strlen(data)+1);
+			strcpy(conf->vndr_ie_assocreq, data);
+			CONFIG_MSG("vndr_ie_assocreq = %s\n", conf->vndr_ie_assocreq);
+		}
+	}
 	else
 		return false;
 
@@ -4631,6 +4677,10 @@ dhd_conf_preinit(dhd_pub_t *dhd)
 		kfree(conf->wl_resume);
 		conf->wl_resume = NULL;
 	}
+	if (conf->vndr_ie_assocreq) {
+		kfree(conf->vndr_ie_assocreq);
+		conf->vndr_ie_assocreq = NULL;
+	}
 	conf->band = -1;
 	memset(&conf->bw_cap, -1, sizeof(conf->bw_cap));
 	if (conf->chip == BCM43362_CHIP_ID || conf->chip == BCM4330_CHIP_ID) {
@@ -4705,6 +4755,10 @@ dhd_conf_preinit(dhd_pub_t *dhd)
 #ifdef BCMSDIO_INTSTATUS_WAR
 	conf->read_intr_mode = 0;
 #endif
+	conf->kso_try_max = 0;
+#ifdef KSO_DEBUG
+	memset(&conf->kso_try_array, 0, sizeof(conf->kso_try_array));
+#endif
 #endif
 #ifdef BCMPCIE
 	conf->bus_deepsleep_disable = 1;
@@ -4720,6 +4774,9 @@ dhd_conf_preinit(dhd_pub_t *dhd)
 	conf->pm_in_suspend = -1;
 	conf->insuspend = 0;
 	conf->suspend_mode = EARLY_SUSPEND;
+#if CUSTOMER_HW_AMLOGIC
+	conf->suspend_mode = PM_NOTIFIER;
+#endif
 	conf->suspend_bcn_li_dtim = -1;
 #ifdef WL_EXT_WOWL
 	dhd_master_mode = TRUE;
@@ -4760,16 +4817,23 @@ dhd_conf_preinit(dhd_pub_t *dhd)
 	conf->ctrl_resched = 2;
 	conf->in4way = STA_NO_SCAN_IN4WAY | STA_WAIT_DISCONNECTED |
 		STA_START_AUTH_DELAY | AP_WAIT_STA_RECONNECT;
+	if (conf->chip == BCM43752_CHIP_ID)
+		conf->war = SET_CHAN_INCONN | FW_REINIT_INCSA;
+	else
+		conf->war = 0;
 #ifdef PROPTX_MAXCOUNT
 	conf->proptx_maxcnt_2g = 46;
 	conf->proptx_maxcnt_5g = WL_TXSTATUS_FREERUNCTR_MASK;
 #endif /* DYNAMIC_PROPTX_MAXCOUNT */
-#ifdef HOST_TPUT_TEST
-	conf->data_drop_mode = 0;
-	conf->tput_measure_ms = 0;
-#endif
 #ifdef TPUT_MONITOR
+	conf->data_drop_mode = NO_DATA_DROP;
 	conf->tput_monitor_ms = 0;
+#endif
+#ifdef SCAN_SUPPRESS
+	conf->scan_intput = SCAN_CURCHAN_INTPUT;
+	conf->scan_busy_thresh = 10;
+	conf->scan_busy_tmo = 120;
+	conf->scan_tput_thresh = 5;
 #endif
 #ifdef DHD_TPUT_PATCH
 	conf->tput_patch = FALSE;
@@ -4903,6 +4967,10 @@ dhd_conf_reset(dhd_pub_t *dhd)
 		kfree(conf->wl_resume);
 		conf->wl_resume = NULL;
 	}
+	if (conf->vndr_ie_assocreq) {
+		kfree(conf->vndr_ie_assocreq);
+		conf->vndr_ie_assocreq = NULL;
+	}
 	memset(conf, 0, sizeof(dhd_conf_t));
 	return 0;
 }
@@ -4966,6 +5034,10 @@ dhd_conf_detach(dhd_pub_t *dhd)
 		if (conf->wl_resume) {
 			kfree(conf->wl_resume);
 			conf->wl_resume = NULL;
+		}
+		if (conf->vndr_ie_assocreq) {
+			kfree(conf->vndr_ie_assocreq);
+			conf->vndr_ie_assocreq = NULL;
 		}
 		MFREE(dhd->osh, conf, sizeof(dhd_conf_t));
 	}

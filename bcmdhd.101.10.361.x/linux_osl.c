@@ -66,6 +66,10 @@ uint32 g_assert_type = 0; /* By Default Kernel Panic */
 
 module_param(g_assert_type, int, 0);
 
+#if defined(CUSTOMER_HW_AMLOGIC) && defined(USE_AML_PCIE_TEE_MEM)
+extern struct device *get_pcie_reserved_mem_dev(void);
+#endif
+
 #if defined(BCMSLTGT)
 /* !!!make sure htclkratio is not 0!!! */
 extern uint htclkratio;
@@ -373,6 +377,14 @@ osl_attach(void *pdev, uint bustype, bool pkttag)
 	}
 #endif /* DHD_MAP_LOGGING */
 
+#if defined(CUSTOMER_HW_AMLOGIC) && defined(USE_AML_PCIE_TEE_MEM)
+	osh->tee_mem_dev = get_pcie_reserved_mem_dev();
+	if (osh->tee_mem_dev) {
+		printf("####### use amlogic pcie TEE protect mem #######\n");
+		((struct pci_dev *)osh->pdev)->dev.dma_mask = NULL;
+	}
+#endif
+
 	return osh;
 }
 
@@ -447,7 +459,7 @@ osl_is_flag_set(osl_t *osh, uint32 mask)
 	return (osh->flags & mask);
 }
 
-#if (defined(__ARM_ARCH_7A__) && !defined(DHD_USE_COHERENT_MEM_FOR_RING))
+#if (defined(BCMPCIE) && defined(__ARM_ARCH_7A__) && !defined(DHD_USE_COHERENT_MEM_FOR_RING))
 
 inline void
 BCMFASTPATH(osl_cache_flush)(void *va, uint size)
@@ -525,6 +537,7 @@ osl_pci_write_config(osl_t *osh, uint offset, uint size, uint val)
 #endif /* BCMDBG */
 }
 
+#ifdef BCMPCIE
 /* return bus # for the pci device pointed by osh->pdev */
 uint
 osl_pci_bus(osl_t *osh)
@@ -577,6 +590,7 @@ osl_pci_device(osl_t *osh)
 
 	return osh->pdev;
 }
+#endif
 
 #ifdef BCMDBG_MEM
 /* In BCMDBG_MEM configurations osl_malloc is only used internally in
@@ -1127,7 +1141,6 @@ osl_dma_alloc_consistent(osl_t *osh, uint size, uint16 align_bits, uint *alloced
 	{
 		dma_addr_t pap_lin;
 		struct pci_dev *hwdev = osh->pdev;
-		struct device *dev = &hwdev->dev;
 		gfp_t flags;
 #ifdef DHD_ALLOC_COHERENT_MEM_FROM_ATOMIC_POOL
 		flags = GFP_ATOMIC;
@@ -1137,11 +1150,12 @@ osl_dma_alloc_consistent(osl_t *osh, uint size, uint16 align_bits, uint *alloced
 #ifdef DHD_ALLOC_COHERENT_MEM_WITH_GFP_COMP
 		flags |= __GFP_COMP;
 #endif /* DHD_ALLOC_COHERENT_MEM_WITH_GFP_COMP */
-#ifdef CUSTOMER_HW_AMLOGIC
-		if (g_pcie_reserved_mem_dev)
-			dev = g_pcie_reserved_mem_dev;
-#endif
-		va = dma_alloc_coherent(dev, size, &pap_lin, flags);
+#if defined(CUSTOMER_HW_AMLOGIC) && defined(USE_AML_PCIE_TEE_MEM)
+		if (osh->tee_mem_dev)
+			va = dma_alloc_coherent(osh->tee_mem_dev, size, &pap_lin, flags);
+		else
+#endif /* CUSTOMER_HW_AMLOGIC && USE_AML_PCIE_TEE_MEM */
+		va = dma_alloc_coherent(&hwdev->dev, size, &pap_lin, flags);
 #ifdef BCMDMA64OSL
 		PHYSADDRLOSET(*pap, pap_lin & 0xffffffff);
 		PHYSADDRHISET(*pap, (pap_lin >> 32) & 0xffffffff);
@@ -1349,9 +1363,11 @@ osl_sleep(uint ms)
 	ms *= htclkratio;
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)
 	if (ms < 20)
 		usleep_range(ms*1000, ms*1000 + 1000);
 	else
+#endif
 		msleep(ms);
 }
 
@@ -1382,7 +1398,11 @@ osl_localtime_ns(void)
 	 * GPL-incompatible module (NIC builds wl.ko)
 	 * cannnot use the GPL-only symbol.
 	 */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)
 	ts_nsec = local_clock();
+#else
+	ts_nsec = cpu_clock(smp_processor_id());
+#endif
 #endif /* BCMDONGLEHOST */
 	return ts_nsec;
 }
@@ -1399,7 +1419,11 @@ osl_get_localtime(uint64 *sec, uint64 *usec)
 	 * GPL-incompatible module (NIC builds wl.ko) can
 	 * not use the GPL-only symbol.
 	 */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)
 	ts_nsec = local_clock();
+#else
+	ts_nsec = cpu_clock(smp_processor_id());
+#endif
 	rem_nsec = do_div(ts_nsec, NSEC_PER_SEC);
 #endif /* BCMDONGLEHOST */
 	*sec = (uint64)ts_nsec;
@@ -2149,6 +2173,7 @@ osl_do_gettimediff(struct osl_timespec *cur_ts, struct osl_timespec *old_ts)
 	return total_diff_us;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 39)
 void
 osl_get_monotonic_boottime(struct osl_timespec *ts)
 {
@@ -2169,3 +2194,4 @@ osl_get_monotonic_boottime(struct osl_timespec *ts)
 	ts->tv_nsec = curtime.tv_nsec;
 	ts->tv_usec = curtime.tv_nsec / 1000;
 }
+#endif

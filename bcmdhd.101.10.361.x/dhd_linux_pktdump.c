@@ -729,6 +729,7 @@ dhd_dump_wsc_message(dhd_pub_t *dhd, int ifidx, uint8 *pktdata,
 				EAP_PRINT("EAP Packet, WPS M8");
 				break;
 			default:
+				EAP_PRINT("EAP Packet, WPS MSG TYPE %d", *msg);
 				break;
 			}
 		}
@@ -744,6 +745,8 @@ dhd_dump_wsc_message(dhd_pub_t *dhd, int ifidx, uint8 *pktdata,
 #endif
 		DHD_STATLOG_DATA(dhd, ST(WSC_DONE), ifidx, tx, cond);
 		EAP_PRINT("EAP Packet, WSC Done");
+	} else {
+		EAP_PRINT("EAP Packet, WSC opcode=%d", eap_wsc->opcode);
 	}
 }
 
@@ -867,6 +870,7 @@ dhd_dump_eap_packet(dhd_pub_t *dhd, int ifidx, uint8 *pktdata,
 				pkthash, pktfate);
 			break;
 		default:
+			EAP_PRINT("EAP Packet, EAP TYPE %d", eap_hdr->type);
 			break;
 		}
 	} else if (eap_hdr->code == EAP_CODE_SUCCESS) {
@@ -875,6 +879,8 @@ dhd_dump_eap_packet(dhd_pub_t *dhd, int ifidx, uint8 *pktdata,
 	} else if (eap_hdr->code == EAP_CODE_FAILURE) {
 		DHD_STATLOG_DATA(dhd, ST(EAP_FAILURE), ifidx, tx, cond);
 		EAP_PRINT("EAP Packet, Failure");
+	} else {
+		EAP_PRINT("EAP Packet, EAP CODE %d", eap_hdr->code);
 	}
 }
 

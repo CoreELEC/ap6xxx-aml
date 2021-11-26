@@ -34,11 +34,7 @@
 #include <sdiovar.h>	/* ioctl/iovars */
 
 #include <linux/mmc/core.h>
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(3, 0, 8))
-#include <drivers/mmc/core/host.h>
-#else
 #include <linux/mmc/host.h>
-#endif /* (LINUX_VERSION_CODE <= KERNEL_VERSION(3, 0, 0)) */
 #include <linux/mmc/card.h>
 #include <linux/mmc/sdio_func.h>
 #include <linux/mmc/sdio_ids.h>
@@ -53,7 +49,7 @@ extern volatile bool dhd_mmc_suspend;
 #endif
 #include "bcmsdh_sdmmc.h"
 
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(3, 0, 0)) || \
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 3, 0)) || \
 	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0))
 static inline void
 mmc_host_clk_hold(struct mmc_host *host)
@@ -74,7 +70,7 @@ mmc_host_clk_rate(struct mmc_host *host)
 {
 	return host->ios.clock;
 }
-#endif /* LINUX_VERSION_CODE <= KERNEL_VERSION(3, 0, 0) */
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3, 3, 0) */
 
 #ifndef BCMSDH_MODULE
 extern int sdio_function_init(void);
@@ -87,7 +83,11 @@ static void IRQHandlerF2(struct sdio_func *func);
 #endif /* !defined(OOB_INTR_ONLY) */
 static int sdioh_sdmmc_get_cisaddr(sdioh_info_t *sd, uint32 regaddr);
 #if defined(ENABLE_INSMOD_NO_FW_LOAD) && !defined(BUS_POWER_RESTORE)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 18, 0) && defined(MMC_SW_RESET)
+extern int mmc_sw_reset(struct mmc_host *host);
+#else
 extern int sdio_reset_comm(struct mmc_card *card);
+#endif
 #endif
 #ifdef GLOBAL_SDMMC_INSTANCE
 extern PBCMSDH_SDMMC_INSTANCE gInstance;
@@ -265,6 +265,9 @@ sdioh_attach(osl_t *osh, struct sdio_func *func)
 	sd->sd_clk_rate = sdmmc_get_clock_rate(sd);
 	printf("%s: sd clock rate = %u\n", __FUNCTION__, sd->sd_clk_rate);
 	sdioh_sdmmc_card_enablefuncs(sd);
+#if !defined(OOB_INTR_ONLY)
+	mutex_init(&sd->claim_host_mutex); // terence 20140926: fix for claim host issue
+#endif
 
 	sd_trace(("%s: Done\n", __FUNCTION__));
 	return sd;
@@ -1656,6 +1659,22 @@ sdioh_sdmmc_card_regread(sdioh_info_t *sd, int func, uint32 regaddr, int regsize
 }
 
 #if !defined(OOB_INTR_ONLY)
+void sdio_claim_host_lock_local(sdioh_info_t *sd) // terence 20140926: fix for claim host issue
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 25))
+	if (sd)
+		mutex_lock(&sd->claim_host_mutex);
+#endif
+}
+
+void sdio_claim_host_unlock_local(sdioh_info_t *sd) // terence 20140926: fix for claim host issue
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 25))
+	if (sd)
+		mutex_unlock(&sd->claim_host_mutex);
+#endif
+}
+
 /* bcmsdh_sdmmc interrupt handler */
 static void IRQHandler(struct sdio_func *func)
 {
@@ -1664,6 +1683,14 @@ static void IRQHandler(struct sdio_func *func)
 	sd = sdio_get_drvdata(func);
 
 	ASSERT(sd != NULL);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 25))
+	if (mutex_is_locked(&sd->claim_host_mutex)) {
+		printf("%s: muxtex is locked and return\n", __FUNCTION__);
+		return;
+	}
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 25)) */
+
+	sdio_claim_host_lock_local(sd);
 	sdio_release_host(sd->func[0]);
 
 	if (sd->use_client_ints) {
@@ -1682,6 +1709,7 @@ static void IRQHandler(struct sdio_func *func)
 	}
 
 	sdio_claim_host(sd->func[0]);
+	sdio_claim_host_unlock_local(sd);
 }
 
 /* bcmsdh_sdmmc interrupt handler for F2 (dummy handler) */
@@ -1718,6 +1746,30 @@ sdioh_sdmmc_card_regwrite(sdioh_info_t *sd, int func, uint32 regaddr, int regsiz
 }
 #endif /* NOTUSED */
 
+#if defined(ENABLE_INSMOD_NO_FW_LOAD) && !defined(BUS_POWER_RESTORE)
+static int sdio_sw_reset(sdioh_info_t *sd)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 18, 0) && defined(MMC_SW_RESET)
+	struct mmc_host *host = sd->func[0]->card->host;
+#endif
+	int err = 0;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 18, 0) && defined(MMC_SW_RESET)
+	printf("%s: Enter\n", __FUNCTION__);
+	sdio_claim_host(sd->func[0]);
+	err = mmc_sw_reset(host);
+	sdio_release_host(sd->func[0]);
+#else
+	err = sdio_reset_comm(sd->func[0]->card);
+#endif
+
+	if (err)
+		sd_err(("%s Failed, error = %d\n", __FUNCTION__, err));
+
+	return err;
+}
+#endif
+
 int
 sdioh_start(sdioh_info_t *sd, int stage)
 {
@@ -1745,7 +1797,7 @@ sdioh_start(sdioh_info_t *sd, int stage)
 		   patch for it
 		*/
 #if defined(ENABLE_INSMOD_NO_FW_LOAD) && !defined(BUS_POWER_RESTORE)
-		if ((ret = sdio_reset_comm(sd->func[0]->card))) {
+		if ((ret = sdio_sw_reset(sd))) {
 			sd_err(("%s Failed, error = %d\n", __FUNCTION__, ret));
 			return ret;
 		} else
@@ -1822,6 +1874,9 @@ sdioh_stop(sdioh_info_t *sd)
 		unregister interrupt with SDIO stack to stop the
 		polling
 	*/
+#if !defined(OOB_INTR_ONLY)
+	sdio_claim_host_lock_local(sd);
+#endif
 	if (sd->func[0]) {
 #if !defined(OOB_INTR_ONLY)
 		sdio_claim_host(sd->func[0]);
@@ -1840,6 +1895,9 @@ sdioh_stop(sdioh_info_t *sd)
 	else
 		sd_err(("%s Failed\n", __FUNCTION__));
 #endif /* defined(OEM_ANDROID) */
+#if !defined(OOB_INTR_ONLY)
+	sdio_claim_host_unlock_local(sd);
+#endif
 	return (0);
 }
 
@@ -1886,21 +1944,19 @@ sdioh_gpio_init(sdioh_info_t *sd)
 uint
 sdmmc_get_clock_rate(sdioh_info_t *sd)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)) || (LINUX_VERSION_CODE < KERNEL_VERSION(3, 4, 0))
-	return 0;
-#else
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 3, 0)) || (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0))
 	struct sdio_func *sdio_func = sd->func[0];
 	struct mmc_host *host = sdio_func->card->host;
 	return mmc_host_clk_rate(host);
+#else
+	return 0;
 #endif
 }
 
 void
 sdmmc_set_clock_rate(sdioh_info_t *sd, uint hz)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)) || (LINUX_VERSION_CODE < KERNEL_VERSION(3, 4, 0))
-	return;
-#else
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 3, 0)) || (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0))
 	struct sdio_func *sdio_func = sd->func[0];
 	struct mmc_host *host = sdio_func->card->host;
 	struct mmc_ios *ios = &host->ios;
@@ -1920,6 +1976,8 @@ sdmmc_set_clock_rate(sdioh_info_t *sd, uint hz)
 	host->ops->set_ios(host, ios);
 	DHD_ERROR(("%s: After change: sd clock rate is %u\n", __FUNCTION__, ios->clock));
 	mmc_host_clk_release(host);
+#else
+	return;
 #endif
 }
 

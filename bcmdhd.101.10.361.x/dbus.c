@@ -2456,6 +2456,7 @@ static void
 dhd_dbus_state_change(void *handle, int state)
 {
 	dhd_pub_t *dhd = (dhd_pub_t *)handle;
+	unsigned long flags;
 
 	if (dhd == NULL) {
 		DBUSERR(("%s: dhd is NULL\n", __FUNCTION__));
@@ -2469,11 +2470,24 @@ dhd_dbus_state_change(void *handle, int state)
 			break;
 		case DBUS_STATE_DOWN:
 			DBUSTRACE(("%s: DBUS is down\n", __FUNCTION__));
+			DHD_LINUX_GENERAL_LOCK(dhd, flags);
+			dhd_txflowcontrol(dhd, ALL_INTERFACES, ON);
 			dhd->busstate = DHD_BUS_DOWN;
+			DHD_LINUX_GENERAL_UNLOCK(dhd, flags);
 			break;
 		case DBUS_STATE_UP:
 			DBUSTRACE(("%s: DBUS is up\n", __FUNCTION__));
+			DHD_LINUX_GENERAL_LOCK(dhd, flags);
+			dhd_txflowcontrol(dhd, ALL_INTERFACES, OFF);
 			dhd->busstate = DHD_BUS_DATA;
+			DHD_LINUX_GENERAL_UNLOCK(dhd, flags);
+			break;
+		case DBUS_STATE_SLEEP:
+			DBUSTRACE(("%s: DBUS is suspend\n", __FUNCTION__));
+			DHD_LINUX_GENERAL_LOCK(dhd, flags);
+			dhd_txflowcontrol(dhd, ALL_INTERFACES, ON);
+			dhd->busstate = DHD_BUS_SUSPEND;
+			DHD_LINUX_GENERAL_UNLOCK(dhd, flags);
 			break;
 		default:
 			break;
@@ -2764,9 +2778,11 @@ dhd_dbus_probe_cb(void *arg, const char *desc, uint32 bustype,
 				wifi_set_adapter_status(adapter, WIFI_STATUS_FW_READY);
 #ifdef BCM_REQUEST_FW
 			} else if (dlneeded > 0) {
+				wifi_clr_adapter_status(adapter, WIFI_STATUS_FW_READY);
 				dhd_set_path(bus->dhd);
 				if (dbus_download_firmware(bus, bus->fw_path, bus->nv_path) != DBUS_OK)
 					goto fail;
+				bus->dhd->busstate = DHD_BUS_LOAD;
 #endif
 			} else {
 				goto fail;

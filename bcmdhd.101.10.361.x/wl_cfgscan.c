@@ -543,19 +543,32 @@ s32 wl_inform_bss_cache(struct bcm_cfg80211 *cfg)
 	wl_scan_results_t *bss_list = cfg->bss_list;
 	wl_bss_info_t *bi = NULL;	/* must be initialized */
 	s32 err = 0;
-	s32 i;
+	s32 i, cnt;
 	struct net_device *ndev = bcmcfg_to_prmry_ndev(cfg);
-#if defined(BSSCACHE)
 	wl_bss_cache_t *node;
-#endif
 
 	WL_SCAN(("scanned AP count (%d)\n", bss_list->count));
-	node = cfg->g_bss_cache_ctrl.m_cache_head;
-	for (i=0; node && i<WL_AP_MAX; i++) {
-		bi = node->results.bss_info;
+	bss_list = cfg->bss_list;
+	preempt_disable();
+	bi = next_bss(bss_list, bi);
+	for_each_bss(bss_list, bi, i) {
 		err = wl_inform_single_bss(cfg, bi, false);
+		if (unlikely(err)) {
+			WL_ERR(("bss inform failed\n"));
+		}
+	}
+
+	cnt = i;	
+	node = cfg->g_bss_cache_ctrl.m_cache_head;
+	WL_SCAN(("cached AP count (%d)\n", wl_bss_cache_size(&cfg->g_bss_cache_ctrl)));
+	for (i=cnt; node && i<WL_AP_MAX; i++) {
+		if (node->dirty > 1) {
+			bi = node->results.bss_info;
+			err = wl_inform_single_bss(cfg, bi, false);
+		}
 		node = node->next;
 	}
+	preempt_enable();
 	if (cfg->autochannel)
 		wl_ext_get_best_channel(ndev, &cfg->g_bss_cache_ctrl, ioctl_version,
 			&cfg->best_2g_ch, &cfg->best_5g_ch);
@@ -1690,9 +1703,12 @@ wl_cfgscan_populate_scan_ssids(struct bcm_cfg80211 *cfg, u8 *buf_ptr, u32 buf_le
 }
 
 static s32
-wl_scan_prep(struct bcm_cfg80211 *cfg, void *scan_params, u32 len,
+wl_scan_prep(struct bcm_cfg80211 *cfg, struct net_device *ndev, void *scan_params, u32 len,
 	struct cfg80211_scan_request *request)
 {
+#ifdef SCAN_SUPPRESS
+	u32 channel;
+#endif
 	wl_scan_params_t *params = NULL;
 	wl_scan_params_v2_t *params_v2 = NULL;
 	u32 scan_type = 0;
@@ -1769,12 +1785,26 @@ wl_scan_prep(struct bcm_cfg80211 *cfg, void *scan_params, u32 len,
 
 	cur_offset = channel_offset;
 	/* Copy channel array if applicable */
-	if ((request->n_channels > 0) && chan_list) {
-		if (len >= (scan_param_size + (request->n_channels * sizeof(u16)))) {
-			wl_cfgscan_populate_scan_channels(cfg,
-					request->channels, request->n_channels,
-					chan_list, &n_channels, true, false);
-			cur_offset += (uint32)(n_channels * (sizeof(u16)));
+#ifdef SCAN_SUPPRESS
+	channel = wl_ext_scan_suppress(ndev, scan_params, cfg->scan_params_v2);
+	if (channel) {
+		n_channels = 1;
+		if ((n_channels > 0) && chan_list) {
+			if (len >= (scan_param_size + (n_channels * sizeof(u16)))) {
+				wl_ext_populate_scan_channel(cfg->pub, chan_list, channel, n_channels);
+				cur_offset += (n_channels * (sizeof(u16)));
+			}
+		}
+	} else
+#endif
+	{
+		if ((request->n_channels > 0) && chan_list) {
+			if (len >= (scan_param_size + (request->n_channels * sizeof(u16)))) {
+				wl_cfgscan_populate_scan_channels(cfg,
+						request->channels, request->n_channels,
+						chan_list, &n_channels, true, false);
+				cur_offset += (uint32)(n_channels * (sizeof(u16)));
+			}
 		}
 	}
 
@@ -2004,7 +2034,7 @@ wl_run_escan(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 			eparams->sync_id = sync_id;
 		}
 
-		if (wl_scan_prep(cfg, scan_params, params_size, request) < 0) {
+		if (wl_scan_prep(cfg, ndev, scan_params, params_size, request) < 0) {
 			WL_ERR(("scan_prep failed\n"));
 			err = -EINVAL;
 			goto exit;
@@ -2553,6 +2583,10 @@ __wl_cfg80211_scan(struct wiphy *wiphy, struct net_device *ndev,
 	}
 
 	mutex_lock(&cfg->scan_sync);
+#ifdef WL_EXT_IAPSTA
+	if (!wl_ext_in4way_sync(ndev_to_wlc_ndev(ndev, cfg), STA_FAKE_SCAN_IN_CONNECT,
+		WL_EXT_STATUS_SCANNING, NULL))
+#endif
 	err = wl_do_escan(cfg, wiphy, ndev, request);
 	if (likely(!err)) {
 		goto scan_success;
@@ -2640,8 +2674,10 @@ wl_cfg80211_scan(struct wiphy *wiphy, struct net_device *ndev,
 #ifdef WL_EXT_IAPSTA
 	err = wl_ext_in4way_sync(ndev_to_wlc_ndev(ndev, cfg), STA_NO_SCAN_IN4WAY,
 		WL_EXT_STATUS_SCAN, NULL);
-	if (err)
+	if (err) {
+		WL_SCAN(("scan suppressed %d\n", err));
 		return err;
+	}
 #endif
 
 	err = __wl_cfg80211_scan(wiphy, ndev, request, NULL);

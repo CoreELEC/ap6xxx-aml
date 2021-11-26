@@ -1830,7 +1830,7 @@ chanspec_t wl_cfg80211_get_shared_freq(struct wiphy *wiphy)
 	return chspec;
 }
 
-static void
+void
 wl_wlfc_enable(struct bcm_cfg80211 *cfg, bool enable)
 {
 #ifdef PROP_TXSTATUS_VSDB
@@ -2384,6 +2384,11 @@ wl_cfg80211_add_if(struct bcm_cfg80211 *cfg,
 		return NULL;
 	}
 #endif /* BCMDONGLEHOST */
+
+	if (dhd->op_mode == DHD_FLAG_HOSTAP_MODE) {
+		WL_ERR(("Please check op_mode %d, name %s\n", dhd->op_mode, name));
+		return NULL;
+	}
 
 	if ((wl_mode = wl_iftype_to_mode(wl_iftype)) < 0) {
 		return NULL;
@@ -3595,6 +3600,9 @@ wl_cfg80211_post_ifcreate(struct net_device *ndev,
 	u16 mode;
 	u8 mac_addr[ETH_ALEN];
 	u16 wl_iftype;
+#ifdef WL_STATIC_IF
+	int static_ifidx;
+#endif
 
 	if (!ndev || !event) {
 		WL_ERR(("Wrong arg\n"));
@@ -3675,8 +3683,10 @@ wl_cfg80211_post_ifcreate(struct net_device *ndev,
 	}
 
 #ifdef WL_STATIC_IF
-	if (IS_CFG80211_STATIC_IF_NAME(cfg, name)) {
-		new_ndev = wl_cfg80211_post_static_ifcreate(cfg, event, addr, iface_type);
+	static_ifidx = wl_cfg80211_static_if_name(cfg, name);
+	if (static_ifidx >= 0) {
+		new_ndev = wl_cfg80211_post_static_ifcreate(cfg, event, addr, iface_type,
+			static_ifidx);
 		if (!new_ndev) {
 			WL_ERR(("failed to get I/F pointer\n"));
 			return NULL;
@@ -3765,9 +3775,10 @@ wl_cfg80211_post_ifcreate(struct net_device *ndev,
 fail:
 #ifdef WL_STATIC_IF
 	/* remove static if from iflist */
-	if (IS_CFG80211_STATIC_IF_NAME(cfg, name)) {
-		cfg->static_ndev_state = NDEV_STATE_FW_IF_FAILED;
-		wl_cfg80211_update_iflist_info(cfg, new_ndev, WL_STATIC_IFIDX, addr,
+	static_ifidx = wl_cfg80211_static_if_name(cfg, name);
+	if (static_ifidx >= 0) {
+		cfg->static_ndev_state[static_ifidx] = NDEV_STATE_FW_IF_FAILED;
+		wl_cfg80211_update_iflist_info(cfg, new_ndev, WL_STATIC_IFIDX+static_ifidx, addr,
 			event->bssidx, event->name, NDEV_STATE_FW_IF_FAILED);
 	}
 #endif /* WL_STATIC_IF */
@@ -3828,7 +3839,7 @@ wl_cfg80211_delete_iface(struct bcm_cfg80211 *cfg,
 					/* Cleanup AP */
 #ifdef WL_STATIC_IF
 						/* handle static ap */
-					if (IS_CFG80211_STATIC_IF(cfg, iter->ndev)) {
+					if (wl_cfg80211_static_if(cfg, iter->ndev)) {
 						dev_close(iter->ndev);
 					} else
 #endif /* WL_STATIC_IF */
@@ -3891,7 +3902,7 @@ wl_cfg80211_post_ifdel(struct net_device *ndev, bool rtnl_lock_reqd, s32 ifidx)
 	}
 
 #ifdef WL_STATIC_IF
-	if (IS_CFG80211_STATIC_IF(cfg, ndev)) {
+	if (wl_cfg80211_static_if(cfg, ndev)) {
 		ret = wl_cfg80211_post_static_ifdel(cfg, ndev);
 	} else
 #endif /* WL_STATIC_IF */
@@ -4145,7 +4156,7 @@ exit:
 	if (ret < 0) {
 		WL_ERR(("iface del failed:%d\n", ret));
 #ifdef WL_STATIC_IF
-		if (IS_CFG80211_STATIC_IF(cfg, ndev)) {
+		if (wl_cfg80211_static_if(cfg, ndev)) {
 			/*
 			 * For static interface, clean up the host data,
 			 * irrespective of fw status. For dynamic
@@ -9665,7 +9676,7 @@ wl_cfg80211_macaddr_sync_reqd(struct net_device *dev)
 	 * from STA to AP in some cases.These
 	 * cases will have iftype as STATION.
 	 */
-	if (IS_CFG80211_STATIC_IF(cfg, dev)) {
+	if (wl_cfg80211_static_if(cfg, dev)) {
 		WL_INFORM_MEM(("STATIC interface\n"));
 		return true;
 	}
@@ -12064,6 +12075,9 @@ wl_handle_assoc_fail(struct bcm_cfg80211 *cfg, wl_assoc_status_t *as, bool compl
 		wl_clr_drv_status(cfg, DISCONNECTING, ndev);
 		wl_clr_drv_status(cfg, NESTED_CONNECT, ndev);
 		WL_INFORM_MEM(("Disconnect from nested connect context\n"));
+#if defined(BSSCACHE)
+		wl_delete_disconnected_bss_cache(&cfg->g_bss_cache_ctrl, (u8*)(&e->addr));
+#endif
 #ifdef WL_EXT_IAPSTA
 		wl_ext_in4way_sync(ndev, STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY|STA_WAIT_DISCONNECTED,
 			WL_EXT_STATUS_DISCONNECTED, NULL);
@@ -12214,6 +12228,9 @@ wl_handle_link_down(struct bcm_cfg80211 *cfg, wl_assoc_status_t *as)
 		wl_clr_drv_status(cfg, DISCONNECTING, ndev);
 		wl_clr_drv_status(cfg, NESTED_CONNECT, ndev);
 		WL_INFORM_MEM(("Disconnect from nested connect context\n"));
+#if defined(BSSCACHE)
+		wl_delete_disconnected_bss_cache(&cfg->g_bss_cache_ctrl, (u8*)(&e->addr));
+#endif
 #ifdef WL_EXT_IAPSTA
 		wl_ext_in4way_sync(ndev, STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY|STA_WAIT_DISCONNECTED,
 			WL_EXT_STATUS_DISCONNECTED, NULL);
@@ -12301,6 +12318,9 @@ wl_handle_link_down(struct bcm_cfg80211 *cfg, wl_assoc_status_t *as)
 
 	/* clear profile before reporting link down */
 	wl_init_prof(cfg, ndev);
+#if defined(BSSCACHE)
+	wl_delete_disconnected_bss_cache(&cfg->g_bss_cache_ctrl, (u8*)(&e->addr));
+#endif
 #ifdef WL_EXT_IAPSTA
 	wl_ext_in4way_sync(ndev, STA_NO_SCAN_IN4WAY|STA_NO_BTC_IN4WAY|STA_WAIT_DISCONNECTED,
 		WL_EXT_STATUS_DISCONNECTED, NULL);
@@ -13394,7 +13414,8 @@ wl_bss_roaming_done(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 	roam_info.resp_ie = conn_info->resp_ie;
 	roam_info.resp_ie_len = conn_info->resp_ie_len;
 #if defined(WL_FILS_ROAM_OFFLD)
-	if ((sec->auth_type == DOT11_FILS_SKEY_PFS)||(sec->auth_type == DOT11_FILS_SKEY)) {
+	if ((sec->auth_type == NL80211_AUTHTYPE_FILS_SK_PFS) ||
+			(sec->auth_type == NL80211_AUTHTYPE_FILS_SK)) {
 		roam_info.fils.kek = fils_info->fils_kek;
 		roam_info.fils.kek_len = fils_info->fils_kek_len;
 		roam_info.fils.update_erp_next_seq_num = true;
@@ -13734,7 +13755,8 @@ wl_bss_connect_done(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 	}
 
 #ifdef WL_FILS
-	if ((sec->auth_type == DOT11_FILS_SKEY_PFS)||(sec->auth_type == DOT11_FILS_SKEY)) {
+	if ((sec->auth_type == NL80211_AUTHTYPE_FILS_SK_PFS) ||
+			(sec->auth_type == NL80211_AUTHTYPE_FILS_SK)) {
 		if ((err = wl_get_fils_connect_params(cfg, ndev)) != BCME_OK) {
 			WL_ERR(("FILS params fetch failed.\n"));
 			goto exit;
@@ -15527,6 +15549,7 @@ wl_cfg80211_net_attach(struct net_device *primary_ndev)
 	struct bcm_cfg80211 *cfg = wl_get_cfg(primary_ndev);
 #ifdef WL_STATIC_IF
 	enum nl80211_iftype ntype;
+	int i;
 #endif
 
 	if (!cfg) {
@@ -15540,10 +15563,13 @@ wl_cfg80211_net_attach(struct net_device *primary_ndev)
 #else
 	ntype = NL80211_IFTYPE_STATION;
 #endif
-	if (wl_cfg80211_register_static_if(cfg, ntype,
-			WL_STATIC_IFNAME_PREFIX) == NULL) {
-		WL_ERR(("static i/f registration failed!\n"));
-		return BCME_ERROR;
+	for (i=0; i<DHD_MAX_STATIC_IFS; i++) {
+		if (wl_cfg80211_register_static_if(cfg, ntype,
+				WL_STATIC_IFNAME_PREFIX, i) == NULL) {
+			WL_ERR(("static i/f registration failed!\n"));
+			wl_cfg80211_unregister_static_if(cfg);
+			return BCME_ERROR;
+		}
 	}
 #endif /* WL_STATIC_IF */
 	return BCME_OK;
@@ -16758,7 +16784,13 @@ static s32 __wl_update_wiphybands(struct bcm_cfg80211 *cfg, bool notify)
 	if (notify) {
 		if (!IS_REGDOM_SELF_MANAGED(wiphy)) {
 			WL_UPDATE_CUSTOM_REGULATORY(wiphy);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0))
+			rtnl_unlock();
+#endif
 			wiphy_apply_custom_regulatory(wiphy, &brcm_regdom);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0))
+			rtnl_lock();
+#endif
 		}
 	}
 
@@ -17656,7 +17688,7 @@ s32 wl_cfg80211_get_p2p_dev_addr(struct net_device *net, struct ether_addr *p2pd
 		return -1;
 	if (!p2p_is_on(cfg)) {
 		get_primary_mac(cfg, &primary_mac);
-		memcpy(p2pdev_addr, (void *)&primary_mac, ETHER_ADDR_LEN);
+		memcpy((void *)&p2pdev_addr, (void *)&primary_mac, ETHER_ADDR_LEN);
 	} else {
 		memcpy(p2pdev_addr->octet, wl_to_p2p_bss_macaddr(cfg, P2PAPI_BSSCFG_DEVICE).octet,
 			ETHER_ADDR_LEN);
@@ -19689,9 +19721,6 @@ wl_cfg80211_set_rekey_data(struct wiphy *wiphy, struct net_device *dev,
 		return -EINVAL;
 	}
 
-	prhex("kck", (const u8 *) (data->kck), RSN_KCK_LENGTH);
-	prhex("kek", (const u8 *) (data->kek), RSN_KEK_LENGTH);
-	prhex("replay_ctr", (const u8 *) (data->replay_ctr), RSN_REPLAY_LEN);
 	bcopy(data->kck, keyinfo.KCK, RSN_KCK_LENGTH);
 	bcopy(data->kek, keyinfo.KEK, RSN_KEK_LENGTH);
 	bcopy(data->replay_ctr, keyinfo.ReplayCounter, RSN_REPLAY_LEN);
@@ -19704,15 +19733,18 @@ wl_cfg80211_set_rekey_data(struct wiphy *wiphy, struct net_device *dev,
 	err = wldev_iovar_setbuf(dev, "bcol_gtk_rekey_ptk", &bcol_keyinfo,
 		sizeof(bcol_keyinfo), cfg->ioctl_buf, WLC_IOCTL_SMLEN, &cfg->ioctl_buf_sync);
 	if (!err) {
-		return err;
+		goto exit;
 	}
 
 	if ((err = wldev_iovar_setbuf(dev, "gtk_key_info", &keyinfo, sizeof(keyinfo),
 		cfg->ioctl_buf, WLC_IOCTL_SMLEN, &cfg->ioctl_buf_sync)) < 0) {
-		WL_ERR(("seting gtk_key_info failed code=%d\n", err));
 		return err;
 	}
 
+exit:
+	prhex("kck", (const u8 *) (data->kck), RSN_KCK_LENGTH);
+	prhex("kek", (const u8 *) (data->kek), RSN_KEK_LENGTH);
+	prhex("replay_ctr", (const u8 *) (data->replay_ctr), RSN_REPLAY_LEN);
 	WL_DBG(("Exit\n"));
 	return err;
 }
@@ -22666,3 +22698,86 @@ wl_cfg80211_autochannel(struct net_device *dev, char* command, int total_len)
 
 	return ret;
 }
+
+#ifdef WL_STATIC_IF
+bool
+wl_cfg80211_static_if(struct bcm_cfg80211 *cfg, struct net_device *ndev)
+{
+	int i;
+
+	if (!cfg)
+		return FALSE;
+
+	for (i=0; i<DHD_MAX_STATIC_IFS; i++) {
+		if (cfg->static_ndev[i] == ndev)
+			return TRUE;
+	}
+
+	return FALSE;
+}
+
+int
+wl_cfg80211_static_ifidx(struct bcm_cfg80211 *cfg, struct net_device *ndev)
+{
+	int i;
+
+	if (!cfg)
+		return -1;
+
+	for (i=0; i<DHD_MAX_STATIC_IFS; i++) {
+		if (cfg->static_ndev[i] == ndev)
+			return i;
+	}
+
+	return -1;
+}
+
+struct net_device *
+wl_cfg80211_static_if_active(struct bcm_cfg80211 *cfg)
+{
+	int i;
+
+	if (!cfg)
+		return NULL;
+
+	for (i=0; i<DHD_MAX_STATIC_IFS; i++) {
+		if (cfg->static_ndev[i] && (cfg->static_ndev_state[i] & NDEV_STATE_FW_IF_CREATED))
+			return cfg->static_ndev[i];
+	}
+
+	return NULL;
+}
+
+int
+wl_cfg80211_static_if_name(struct bcm_cfg80211 *cfg, const char *name)
+{
+	int i;
+
+	if (!cfg)
+		return -1;
+
+	for (i=0; i<DHD_MAX_STATIC_IFS; i++) {
+		if (cfg->static_ndev[i] && (!strncmp(cfg->static_ndev[i]->name, name, strlen(name))))
+			return i;
+	}
+
+	return -1;
+}
+
+void
+wl_cfg80211_static_if_dev_close(struct net_device *dev)
+{
+	struct bcm_cfg80211 *cfg = wl_get_cfg(dev);
+	int i;
+
+	if (!cfg)
+		return;
+
+	for (i=0; i<DHD_MAX_STATIC_IFS; i++) {
+		if (cfg->static_ndev[i] && (cfg->static_ndev[i]->flags & IFF_UP))
+			dev_close(cfg->static_ndev[i]);
+	}
+
+	return;
+}
+#endif /* WL_STATIC_IF */

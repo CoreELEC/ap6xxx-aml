@@ -1398,7 +1398,7 @@ wl_iw_iscan_set_scan(
 		}
 	}
 #endif
-	return wl_escan_set_scan(dev, dhd, &ssid, 0, TRUE);
+	return wl_escan_set_scan(dev, &ssid, 0, TRUE);
 #else
 	iscan = &wext_info->iscan;
 	WL_TRACE(("%s: SIOCSIWSCAN iscan=%p\n", dev->name, iscan));
@@ -1788,7 +1788,7 @@ wl_iw_iscan_get_scan(
 	DHD_CHECK(dhd, dev);
 	wext_info = dhd->wext_info;
 #ifdef WL_ESCAN
-	return wl_escan_get_scan(dev, dhd, info, dwrq, extra);
+	return wl_escan_get_scan(dev, info, dwrq, extra);
 #else
 	WL_TRACE(("%s SIOCGIWSCAN\n", dev->name));
 
@@ -4180,8 +4180,9 @@ _iscan_sysioc_thread(void *data)
 #endif /* !WL_ESCAN */
 
 void
-wl_iw_detach(struct net_device *dev, dhd_pub_t *dhdp)
+wl_iw_detach(struct net_device *dev)
 {
+	struct dhd_pub *dhdp = dhd_get_pub(dev);
 	wl_wext_info_t *wext_info = dhdp->wext_info;
 #ifndef WL_ESCAN
 	iscan_buf_t  *buf;
@@ -4211,8 +4212,9 @@ wl_iw_detach(struct net_device *dev, dhd_pub_t *dhdp)
 }
 
 int
-wl_iw_attach(struct net_device *dev, dhd_pub_t *dhdp)
+wl_iw_attach(struct net_device *dev)
 {
+	struct dhd_pub *dhdp = dhd_get_pub(dev);
 	wl_wext_info_t *wext_info = NULL;
 	int ret = 0;
 #ifndef WL_ESCAN
@@ -4268,36 +4270,7 @@ wl_iw_attach(struct net_device *dev, dhd_pub_t *dhdp)
 
 	return ret;
 exit:
-	wl_iw_detach(dev, dhdp);
-	return ret;
-}
-
-void
-wl_iw_down(struct net_device *dev, dhd_pub_t *dhdp)
-{
-	wl_wext_info_t *wext_info = NULL;
-
-	if (dhdp) {
-		wext_info = dhdp->wext_info;
- 	} else {
-		WL_ERROR (("dhd is NULL\n"));
-		return;
-	}
-}
-
-int
-wl_iw_up(struct net_device *dev, dhd_pub_t *dhdp)
-{
-	wl_wext_info_t *wext_info = NULL;
-	int ret = 0;
-
-	if (dhdp) {
-		wext_info = dhdp->wext_info;
- 	} else {
-		WL_ERROR (("dhd is NULL\n"));
-		return -ENODEV;
-	}
-
+	wl_iw_detach(dev);
 	return ret;
 }
 
