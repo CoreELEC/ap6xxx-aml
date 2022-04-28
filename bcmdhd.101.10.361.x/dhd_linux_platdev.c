@@ -573,9 +573,9 @@ static int wifi_ctrlfunc_register_drv(void)
 #ifdef BCMDHD_MDRIVER
 #ifdef BCMSDIO
 	adapter->index = 0;
-#elif defined(BCMPCIE)
+#elif BCMPCIE
 	adapter->index = 1;
-#elif defined(BCMDBUS)
+#elif BCMUSB
 	adapter->index = 2;
 #endif
 #endif
