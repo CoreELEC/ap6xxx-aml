@@ -89,7 +89,7 @@ typedef struct dhd_info {
 #ifdef BCMDBUS
 	ulong		wlfc_lock_flags;
 	ulong		wlfc_pub_lock_flags;
-#endif /* BCMDBUS */
+#endif
 #endif /* PROP_TXSTATUS */
 	wait_queue_head_t ioctl_resp_wait;
 	wait_queue_head_t d3ack_wait;
@@ -111,12 +111,10 @@ typedef struct dhd_info {
 	spinlock_t	sdlock;
 	spinlock_t	txqlock;
 	spinlock_t	dhd_lock;
-	spinlock_t	txoff_lock;
 #ifdef BCMDBUS
 	ulong		txqlock_flags;
-#endif /* BCMDBUS */
+#else
 
-#ifndef BCMDBUS
 	struct semaphore sdsem;
 	tsk_ctl_t	thr_dpc_ctl;
 	tsk_ctl_t	thr_wdt_ctl;
