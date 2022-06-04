@@ -283,3 +283,7 @@ clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) ARCH=$(ARCH) clean
 	$(RM) Module.markers
 	$(RM) modules.order
+
+# driver doesn't work with WL_STATIC_IF
+DHDCFLAGS := $(filter-out -DWL_STATIC_IF,$(DHDCFLAGS))
+EXTRA_CFLAGS += -Wno-error

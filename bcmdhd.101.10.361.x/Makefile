@@ -329,6 +329,12 @@ ifneq ($(CONFIG_BCMDHD_PCIE),)
 endif
 endif
 
+# aarch64-none-elf-gcc doesn't set predefined macros
+DHDCFLAGS += -D__linux=1 -D__linux__=1 -D__gnu_linux__=1 -Dlinux=1
+
+# driver doesn't work with WL_STATIC_IF
+DHDCFLAGS := $(filter-out -DWL_STATIC_IF,$(DHDCFLAGS))
+
 ARCH ?= arm64
 CROSS_COMPILE ?=aarch64-linux-gnu-
 KDIR ?=../../../../../../common
@@ -358,7 +364,7 @@ modules_install:
 bcmdhd_sdio:
 	$(warning "building BCMDHD_SDIO..........")
 	$(MAKE) -C $(KERNEL_SRC) M=$(M) CONFIG_DHD_USE_STATIC_BUF=y modules
-	#mv dhd.ko dhd_sdio.ko
+	mv dhd.ko dhd_sdio.ko
 
 bcmdhd_usb:
 	$(warning "building BCMDHD_USB..........")
