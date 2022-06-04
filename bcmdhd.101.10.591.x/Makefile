@@ -95,9 +95,9 @@ ifndef CONFIG_KASAN
 	KBUILD_CFLAGS_MODULE += -Wframe-larger-than=3000
 endif
 
-DHDCFLAGS = -Wall -Wstrict-prototypes -Wno-date-time                      \
-	-Wno-maybe-uninitialized                                              \
-    -Wno-error -Wno-format-security -Wno-strict-prototypes                \
+DHDCFLAGS = -Wall -Wstrict-prototypes -Wno-date-time                    \
+	-Wno-maybe-uninitialized -Wno-unused-but-set-variable                 \
+	-Wno-error -Wno-format-security -Wno-strict-prototypes                \
 	-Wno-unknown-warning-option -Wno-sometimes-uninitialized              \
 	-Wno-parentheses-equality -Wno-implicit-fallthrough                   \
 	-Dlinux -DLINUX -DBCMDRIVER -DBCMUTILS_ERR_CODES                      \
@@ -519,6 +519,12 @@ ifneq ($(CONFIG_BCMDHD_PCIE),)
 endif
 endif
 
+# aarch64-none-elf-gcc doesn't set predefined macros
+DHDCFLAGS += -D__linux=1 -D__linux__=1 -D__gnu_linux__=1 -Dlinux=1
+
+# driver doesn't work with WL_STATIC_IF
+DHDCFLAGS := $(filter-out -DWL_STATIC_IF,$(DHDCFLAGS))
+
 ARCH ?= arm64
 CROSS_COMPILE ?=aarch64-linux-gnu-
 KDIR ?=../../../../../../common
@@ -548,6 +554,8 @@ modules_install:
 bcmdhd_sdio:
 	$(warning "building BCMDHD_SDIO..........")
 	$(MAKE) -C $(KERNEL_SRC) M=$(M) CONFIG_DHD_USE_STATIC_BUF=y modules
+	$(CROSS_COMPILE)strip --strip-unneeded ${OUT_DIR}/$(M)/dhd.ko
+	mv dhd.ko dhd_sdio.ko
 
 bcmdhd_usb:
 	$(warning "building BCMDHD_USB..........")
