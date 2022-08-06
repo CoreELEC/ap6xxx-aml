@@ -335,6 +335,9 @@ DHDCFLAGS += -D__linux=1 -D__linux__=1 -D__gnu_linux__=1 -Dlinux=1
 # driver doesn't work with WL_STATIC_IF
 DHDCFLAGS := $(filter-out -DWL_STATIC_IF,$(DHDCFLAGS))
 
+# disable gcc 12 compile error
+DHDCFLAGS += -Wno-address
+
 ARCH ?= arm64
 CROSS_COMPILE ?=aarch64-linux-gnu-
 KDIR ?=../../../../../../common
