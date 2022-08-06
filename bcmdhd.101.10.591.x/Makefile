@@ -710,6 +710,9 @@ endif
 	DHDCFLAGS := $(filter-out -DWL_STATIC_IF,$(DHDCFLAGS))
 endif
 
+# disable gcc 12 compile error
+DHDCFLAGS += -Wno-address
+
 ARCH ?= arm64
 M ?= $(CURDIR)
 BCMDHD_ROOT ?= $(src)
