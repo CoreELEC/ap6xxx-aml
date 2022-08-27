@@ -189,6 +189,8 @@
 #define BCM43455_D11AC_ID	0x43e3		/* 43455 802.11ac dualband device */
 #define BCM43455_D11AC2G_ID	0x43e4		/* 43455 802.11ac 2.4G device */
 #define BCM43455_D11AC5G_ID	0x43e5		/* 43455 802.11ac 5G device */
+#define BCM43455_D11AC_V2_ID  0xa9bf		/* AMPAK AP6255 */
+
 #define BCM4335_D11AC_ID	0x43ae
 #define BCM4335_D11AC2G_ID	0x43af
 #define BCM4335_D11AC5G_ID	0x43b0
