@@ -203,6 +203,7 @@
 #define BCM4360_CHIP_ID		0x4360          /* 4360 chipcommon chipid */
 #define BCM4352_CHIP_ID		0x4352          /* 4352 chipcommon chipid */
 #define BCM43526_CHIP_ID	0xAA06
+#define BCM43455_D11AC_V2_ID	0xA9BF      /* AMPAK AP6255 */
 #define BCM43562_CHIP_ID	0xAA2A          /* 43562 chipcommon chipid */
 #define	BCM43012_CHIP_ID	0xA804          /* 43012 chipcommon chipid */
 #define	BCM43013_CHIP_ID	0xA805          /* 43013 chipcommon chipid */
