@@ -21,11 +21,7 @@
 #define FW_TYPE_AG      1
 
 #define FW_PATH_AUTO_SELECT 1
-#ifdef BCMDHD_MDRIVER
-#define CONFIG_PATH_AUTO_SELECT
-#else
-#define CONFIG_PATH_AUTO_SELECT
-#endif
+//#define CONFIG_PATH_AUTO_SELECT
 extern char firmware_path[MOD_PARAM_PATHLEN];
 #if defined(BCMSDIO)
 extern uint dhd_rxbound;
