@@ -64,7 +64,7 @@ DHDCFLAGS = -Wall -Wstrict-prototypes -Wno-date-time                      \
 	-DPOWERUP_MAX_RETRY=1 -DIFACE_HANG_FORCE_DEV_CLOSE -DWAIT_DEQUEUE     \
 	-DUSE_NEW_RSPEC_DEFS                                                  \
 	-DWL_EXT_IAPSTA -DWL_ESCAN -DCCODE_LIST -DSUSPEND_EVENT               \
-	-DKEY_INSTALL_CHECK -DWL_P2P_RAND                                     \
+	-DKEY_INSTALL_CHECK                                                   \
 	-DENABLE_INSMOD_NO_FW_LOAD
 
 DHDOFILES = aiutils.o siutils.o sbutils.o                                 \
@@ -87,6 +87,7 @@ ifneq ($(CONFIG_CFG80211),)
 	DHDOFILES += wl_linux_mon.o wl_cfg_btcoex.o wl_cfgvendor.o
 	DHDOFILES += dhd_cfg80211.o wl_cfgvif.o wl_roam.o
 	DHDCFLAGS += -DWL_CFG80211 -DWLP2P -DWL_CFG80211_STA_EVENT
+	DHDCFLAGS += -DWL_P2P_RAND
 	DHDCFLAGS += -DWL_CAP_HE
 	DHDCFLAGS += -DWL_IFACE_COMB_NUM_CHANNELS
 	DHDCFLAGS += -DCUSTOM_PNO_EVENT_LOCK_xTIME=10
@@ -98,6 +99,7 @@ ifneq ($(CONFIG_CFG80211),)
 #    DHDCFLAGS += -DHOSTAPD_BW_SUPPORT
 	DHDCFLAGS += -DWL_VIRTUAL_APSTA -DSTA_MGMT
 	DHDCFLAGS += -DPNO_SUPPORT -DEXPLICIT_DISCIF_CLEANUP
+#    DHDCFLAGS += -DWL_SCHED_SCAN
 	DHDCFLAGS += -DDHD_USE_SCAN_WAKELOCK
 	DHDCFLAGS += -DSPECIFIC_MAC_GEN_SCHEME
 	DHDCFLAGS += -DWL_IFACE_MGMT
@@ -268,7 +270,7 @@ endif
 endif
 
 # MESH support for kernel 3.10 later
-ifeq ($(CONFIG_WL_MESH),y)
+ifeq ($(CONFIG_BCMDHD_WLMESH),y)
 	DHDCFLAGS += -DWLMESH
 ifneq ($(CONFIG_CFG80211),)
 	DHDCFLAGS += -DWLMESH_CFG80211
