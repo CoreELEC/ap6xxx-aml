@@ -251,7 +251,8 @@ dhd_conf_extsae_chip(dhd_pub_t *dhd)
 {
 	uint chip = dhd->conf->chip;
 
-	if (chip == BCM43569_CHIP_ID || chip == BCM4354_CHIP_ID) {
+	if (chip == BCM43569_CHIP_ID || chip == BCM4354_CHIP_ID ||
+			chip == BCM4359_CHIP_ID) {
 		return false;
 	}
 
