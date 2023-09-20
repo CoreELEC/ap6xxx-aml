@@ -1280,6 +1280,9 @@ dhd_conf_update_path(dhd_pub_t *dhd)
 #endif
 #ifdef CONFIG_PATH_AUTO_SELECT
 	dhd_conf_set_file_name_by_chip(dhd, info->conf_path, "config_", ".txt");
+#else
+	dhd_conf_preinit(dhd);
+	dhd_conf_read_config(dhd, info->conf_path);
 #endif
 
 	dhd_conf_set_file_name_by_chip_bus(dhd, info->sig_path, "sig_", ".cert");
