@@ -909,7 +909,9 @@ exit:
  */
 
 #ifdef CUSTOMER_HW_AMLOGIC
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 119))
 #include <linux/amlogic/aml_gpio_consumer.h>
+#endif
 extern int wifi_irq_trigger_level(void);
 #endif
 SDIOH_API_RC
@@ -919,7 +921,11 @@ sdioh_enable_hw_oob_intr(sdioh_info_t *sd, bool enable)
 	uint8 data;
 
 	if (enable) {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 119))
 		if (wifi_irq_trigger_level() == GPIO_IRQ_LOW)
+#else
+		if (wifi_irq_trigger_level() & IRQF_TRIGGER_LOW)
+#endif
 			data = SDIO_SEPINT_MASK | SDIO_SEPINT_OE;
 		else
 			data = SDIO_SEPINT_MASK | SDIO_SEPINT_OE | SDIO_SEPINT_ACT_HI;
