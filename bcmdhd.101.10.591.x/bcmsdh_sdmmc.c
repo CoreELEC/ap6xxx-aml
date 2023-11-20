@@ -1207,8 +1207,7 @@ sdioh_enable_hw_oob_intr(sdioh_info_t *sd, bool enable)
 
 	if (enable) {
 #ifdef CUSTOMER_HW_AMLOGIC
-		if (wifi_irq_trigger_level() == GPIO_IRQ_LOW \
-                    || wifi_irq_trigger_level() == IRQF_TRIGGER_LOW)
+		if (wifi_irq_trigger_level() & IRQF_TRIGGER_LOW)
 			data = SDIO_SEPINT_MASK | SDIO_SEPINT_OE;
 		else
 #endif

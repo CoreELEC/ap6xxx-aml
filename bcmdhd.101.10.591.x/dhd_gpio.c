@@ -432,7 +432,7 @@ dhd_wlan_init_gpio(wifi_adapter_info_t *adapter)
 
 #ifdef HW_OOB
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 8, 0))
-	if (wifi_irq_trigger_level() == GPIO_IRQ_LOW || wifi_irq_trigger_level() == IRQF_TRIGGER_LOW)
+	if (wifi_irq_trigger_level() & IRQF_TRIGGER_LOW)
 		host_oob_irq_flags = IORESOURCE_IRQ | IORESOURCE_IRQ_LOWLEVEL | IORESOURCE_IRQ_SHAREABLE;
 	else
 		host_oob_irq_flags = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHLEVEL | IORESOURCE_IRQ_SHAREABLE;
