@@ -100,6 +100,7 @@ typedef struct chip_name_map_t {
 const chip_name_map_t chip_name_map[] = {
 	/* ChipID			Chiprev	ChipName		ModuleName  */
 #ifdef BCMSDIO
+	{BCM4339_CHIP_ID,	1,	"bcm4339a0_ag",		"ap6335"},
 	{BCM43430_CHIP_ID,	0,	"bcm43438a0",		"ap6212"},
 	{BCM43430_CHIP_ID,	1,	"bcm43438a1",		"ap6212a"},
 	{BCM43430_CHIP_ID,	2,	"bcm43436b0",		"ap6236"},
@@ -252,7 +253,7 @@ dhd_conf_extsae_chip(dhd_pub_t *dhd)
 	uint chip = dhd->conf->chip;
 
 	if (chip == BCM43569_CHIP_ID || chip == BCM4354_CHIP_ID ||
-			chip == BCM4359_CHIP_ID) {
+			chip == BCM4359_CHIP_ID || chip == BCM4339_CHIP_ID) {
 		return false;
 	}
 
