@@ -13,7 +13,7 @@
 #include <linux/amlogic/wlan_plat.h>
 #include <linux/amlogic/dhd_buf.h>
 
-#define	DHD_STATIC_VERSION_STR		"101.10.361.36 (wlan=r892223-20231107-1)"
+#define	DHD_STATIC_VERSION_STR		"101.10.591.36 (wlan=r892223-20231107-1)"
 #define STATIC_ERROR_LEVEL	BIT(0)
 #define STATIC_TRACE_LEVEL	BIT(1)
 #define STATIC_MSG_LEVEL	BIT(0)
