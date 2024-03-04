@@ -1541,6 +1541,8 @@ dhd_conf_set_path_params(dhd_pub_t *dhd, char *fw_path, char *nv_path)
 	}
 #ifdef CONFIG_PATH_AUTO_SELECT
 	dhd_conf_set_conf_name_by_chip(dhd, dhd->conf_path);
+#else
+	dhd_conf_read_config(dhd, dhd->conf_path);
 #endif
 
 	ag_type = dhd_conf_set_fw_name_by_chip(dhd, fw_path);
@@ -1563,7 +1565,6 @@ dhd_conf_set_path_params(dhd_pub_t *dhd, char *fw_path, char *nv_path)
 	CONFIG_MSG("Final clm_path=%s\n", dhd->clm_path);
 	CONFIG_MSG("Final conf_path=%s\n", dhd->conf_path);
 
-	dhd_conf_read_config(dhd, dhd->conf_path);
 #ifdef DHD_TPUT_PATCH
 	dhd_conf_dump_tput_patch(dhd);
 #endif
