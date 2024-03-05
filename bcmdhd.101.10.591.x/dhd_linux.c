@@ -1133,7 +1133,7 @@ int dhd_send_twt_info_suspend(dhd_pub_t *dhdp, bool suspend)
 }
 int dhd_config_twt_event_mask_in_suspend(dhd_pub_t *dhdp, bool suspend)
 {
-	int ret = BCME_OK;
+	int ret2, ret = BCME_OK;
 	u8 buf[WLC_IOCTL_SMLEN] = {0};
 	eventmsgs_ext_t *eventmask_msg = NULL;
 
@@ -1160,39 +1160,40 @@ int dhd_config_twt_event_mask_in_suspend(dhd_pub_t *dhdp, bool suspend)
 	eventmask_msg->len = ROUNDUP(WLC_E_LAST, NBBY)/NBBY;
 
 	/* Read event_msgs_ext mask */
-	ret = dhd_iovar(dhdp, 0, "event_msgs_ext", (char *)eventmask_msg, msglen, buf,
+	ret2 = dhd_iovar(dhdp, 0, "event_msgs_ext", (char *)eventmask_msg, msglen, buf,
 			WLC_IOCTL_SMLEN, FALSE);
 	/* event_msgs_ext must be supported */
-	if (ret != BCME_OK) {
-		DHD_ERROR(("%s read event mask ext failed %d\n", __FUNCTION__, ret));
-		goto fail;
-	}
+	if (ret2 == BCME_OK) {
+		bcopy(buf, eventmask_msg, msglen);
 
-	bcopy(buf, eventmask_msg, msglen);
+		/* suspend */
+		if (suspend) {
+			/* Clear TWT EVENT bit mask */
+			clrbit(eventmask_msg->mask, WLC_E_TWT);
+		} else {
+		/* resume */
+			/* Set TWT EVENT bit mask */
+			setbit(eventmask_msg->mask, WLC_E_TWT);
+		}
 
-	/* suspend */
-	if (suspend) {
-		/* Clear TWT EVENT bit mask */
-		clrbit(eventmask_msg->mask, WLC_E_TWT);
+		/* Write updated Event mask */
+		eventmask_msg->ver = EVENTMSGS_VER;
+		eventmask_msg->command = EVENTMSGS_SET_MASK;
+		eventmask_msg->len = WL_EVENTING_MASK_EXT_LEN;
+
+		ret = dhd_iovar(dhdp, 0, "event_msgs_ext", (char *)eventmask_msg, msglen,
+				NULL, 0, TRUE);
+		if (ret < 0)
+			DHD_ERROR(("%s write event mask ext failed %d\n", __FUNCTION__, ret));
+	} else if (ret2 == BCME_UNSUPPORTED || ret2 == BCME_VERSION) {
+		/* Skip for BCME_UNSUPPORTED or BCME_VERSION */
+		DHD_ERROR(("%s event_msgs_ext not support or version mismatch %d\n",
+			__FUNCTION__, ret2));
 	} else {
-	/* resume */
-		/* Set TWT EVENT bit mask */
-		setbit(eventmask_msg->mask, WLC_E_TWT);
+		DHD_ERROR(("%s read event mask ext failed %d\n", __FUNCTION__, ret));
+		ret = ret2;
 	}
 
-	/* Write updated Event mask */
-	eventmask_msg->ver = EVENTMSGS_VER;
-	eventmask_msg->command = EVENTMSGS_SET_MASK;
-	eventmask_msg->len = WL_EVENTING_MASK_EXT_LEN;
-
-	ret = dhd_iovar(dhdp, 0, "event_msgs_ext", (char *)eventmask_msg, msglen,
-			NULL, 0, TRUE);
-	if (ret < 0) {
-		DHD_ERROR(("%s write event mask ext failed %d\n", __FUNCTION__, ret));
-		goto fail;
-	}
-
-fail:
 	if (eventmask_msg) {
 		MFREE(dhdp->osh, eventmask_msg, msglen);
 	}
@@ -10857,6 +10858,7 @@ dhd_optimised_preinit_ioctls(dhd_pub_t * dhd)
 		sizeof(event_log_max_sets), FALSE);
 	if (ret == BCME_OK) {
 		dhd->event_log_max_sets = event_log_max_sets;
+		dhd->event_log_max_sets_queried = TRUE;
 	} else {
 		dhd->event_log_max_sets = NUM_EVENT_LOG_SETS;
 	}
@@ -10865,7 +10867,6 @@ dhd_optimised_preinit_ioctls(dhd_pub_t * dhd)
 	 * this will be used during parsing the logsets in the reverse order.
 	 */
 	OSL_SMP_WMB();
-	dhd->event_log_max_sets_queried = TRUE;
 	DHD_ERROR(("%s: event_log_max_sets: %d ret: %d\n",
 		__FUNCTION__, dhd->event_log_max_sets, ret));
 
@@ -12041,6 +12042,7 @@ dhd_legacy_preinit_ioctls(dhd_pub_t *dhd)
 		sizeof(event_log_max_sets), FALSE);
 	if (ret == BCME_OK) {
 		dhd->event_log_max_sets = event_log_max_sets;
+			dhd->event_log_max_sets_queried = TRUE;
 	} else {
 		dhd->event_log_max_sets = NUM_EVENT_LOG_SETS;
 	}
@@ -12048,7 +12050,6 @@ dhd_legacy_preinit_ioctls(dhd_pub_t *dhd)
 	 * this will be used during parsing the logsets in the reverse order.
 	 */
 	OSL_SMP_WMB();
-	dhd->event_log_max_sets_queried = TRUE;
 	DHD_ERROR(("%s: event_log_max_sets: %d ret: %d\n",
 		__FUNCTION__, dhd->event_log_max_sets, ret));
 
@@ -12257,164 +12258,169 @@ dhd_legacy_preinit_ioctls(dhd_pub_t *dhd)
 	eventmask_msg->len = ROUNDUP(WLC_E_LAST, NBBY)/NBBY;
 
 	/* Read event_msgs_ext mask */
-	ret = dhd_iovar(dhd, 0, "event_msgs_ext", (char *)eventmask_msg, msglen, iov_buf,
+	ret2 = dhd_iovar(dhd, 0, "event_msgs_ext", (char *)eventmask_msg, msglen, iov_buf,
 			WLC_IOCTL_SMLEN, FALSE);
 
 	/* event_msgs_ext must be supported */
-	if (ret != BCME_OK) {
-		DHD_ERROR(("%s read event mask ext failed %d\n", __FUNCTION__, ret));
-		goto done;
-	}
+	if (ret2 == BCME_OK) {
+		bcopy(iov_buf, eventmask_msg, msglen);
+		/* make up event mask ext message iovar for event larger than 128 */
+		mask = eventmask_msg->mask;
 
-	bcopy(iov_buf, eventmask_msg, msglen);
-	/* make up event mask ext message iovar for event larger than 128 */
-	mask = eventmask_msg->mask;
-
-	/* Setup event_msgs */
-	setbit(mask, WLC_E_SET_SSID);
-	setbit(mask, WLC_E_PRUNE);
-	setbit(mask, WLC_E_AUTH);
-	setbit(mask, WLC_E_AUTH_IND);
-	setbit(mask, WLC_E_ASSOC);
-	setbit(mask, WLC_E_REASSOC);
-	setbit(mask, WLC_E_REASSOC_IND);
-	if (!(dhd->op_mode & DHD_FLAG_IBSS_MODE))
-		setbit(mask, WLC_E_DEAUTH);
-	setbit(mask, WLC_E_DEAUTH_IND);
-	setbit(mask, WLC_E_DISASSOC_IND);
-	setbit(mask, WLC_E_DISASSOC);
-	setbit(mask, WLC_E_JOIN);
-	setbit(mask, WLC_E_START);
-	setbit(mask, WLC_E_ASSOC_IND);
-	setbit(mask, WLC_E_PSK_SUP);
-	setbit(mask, WLC_E_LINK);
-	setbit(mask, WLC_E_MIC_ERROR);
-	setbit(mask, WLC_E_ASSOC_REQ_IE);
-	setbit(mask, WLC_E_ASSOC_RESP_IE);
+		/* Setup event_msgs */
+		setbit(mask, WLC_E_SET_SSID);
+		setbit(mask, WLC_E_PRUNE);
+		setbit(mask, WLC_E_AUTH);
+		setbit(mask, WLC_E_AUTH_IND);
+		setbit(mask, WLC_E_ASSOC);
+		setbit(mask, WLC_E_REASSOC);
+		setbit(mask, WLC_E_REASSOC_IND);
+		if (!(dhd->op_mode & DHD_FLAG_IBSS_MODE))
+			setbit(mask, WLC_E_DEAUTH);
+		setbit(mask, WLC_E_DEAUTH_IND);
+		setbit(mask, WLC_E_DISASSOC_IND);
+		setbit(mask, WLC_E_DISASSOC);
+		setbit(mask, WLC_E_JOIN);
+		setbit(mask, WLC_E_START);
+		setbit(mask, WLC_E_ASSOC_IND);
+		setbit(mask, WLC_E_PSK_SUP);
+		setbit(mask, WLC_E_LINK);
+		setbit(mask, WLC_E_MIC_ERROR);
+		setbit(mask, WLC_E_ASSOC_REQ_IE);
+		setbit(mask, WLC_E_ASSOC_RESP_IE);
 #ifdef LIMIT_BORROW
-	setbit(mask, WLC_E_ALLOW_CREDIT_BORROW);
+		setbit(mask, WLC_E_ALLOW_CREDIT_BORROW);
 #endif
 #ifndef WL_CFG80211
-	setbit(mask, WLC_E_PMKID_CACHE);
-//	setbit(mask, WLC_E_TXFAIL); // terence 20181106: remove unnecessary event
+		setbit(mask, WLC_E_PMKID_CACHE);
+	//	setbit(mask, WLC_E_TXFAIL); // terence 20181106: remove unnecessary event
 #endif
-	setbit(mask, WLC_E_JOIN_START);
-	setbit(mask, WLC_E_OWE_INFO);
-//	setbit(mask, WLC_E_SCAN_COMPLETE); // terence 20150628: remove redundant event
+		setbit(mask, WLC_E_JOIN_START);
+		setbit(mask, WLC_E_OWE_INFO);
+	//	setbit(mask, WLC_E_SCAN_COMPLETE); // terence 20150628: remove redundant event
 #ifdef DHD_DEBUG
-	setbit(mask, WLC_E_SCAN_CONFIRM_IND);
+		setbit(mask, WLC_E_SCAN_CONFIRM_IND);
 #endif
 #ifdef PNO_SUPPORT
-	setbit(mask, WLC_E_PFN_NET_FOUND);
-	setbit(mask, WLC_E_PFN_BEST_BATCHING);
-	setbit(mask, WLC_E_PFN_BSSID_NET_FOUND);
-	setbit(mask, WLC_E_PFN_BSSID_NET_LOST);
+		setbit(mask, WLC_E_PFN_NET_FOUND);
+		setbit(mask, WLC_E_PFN_BEST_BATCHING);
+		setbit(mask, WLC_E_PFN_BSSID_NET_FOUND);
+		setbit(mask, WLC_E_PFN_BSSID_NET_LOST);
 #endif /* PNO_SUPPORT */
-	/* enable dongle roaming event */
+		/* enable dongle roaming event */
 #ifdef WL_CFG80211
 #if !defined(ROAM_EVT_DISABLE)
-	setbit(mask, WLC_E_ROAM);
+		setbit(mask, WLC_E_ROAM);
 #endif /* !ROAM_EVT_DISABLE */
-	setbit(mask, WLC_E_BSSID);
+		setbit(mask, WLC_E_BSSID);
 #endif /* WL_CFG80211 */
 #ifdef BCMCCX
-	setbit(mask, WLC_E_ADDTS_IND);
-	setbit(mask, WLC_E_DELTS_IND);
+		setbit(mask, WLC_E_ADDTS_IND);
+		setbit(mask, WLC_E_DELTS_IND);
 #endif /* BCMCCX */
 #ifdef WLTDLS
-	setbit(mask, WLC_E_TDLS_PEER_EVENT);
+		setbit(mask, WLC_E_TDLS_PEER_EVENT);
 #endif /* WLTDLS */
 #ifdef WL_ESCAN
-	setbit(mask, WLC_E_ESCAN_RESULT);
+		setbit(mask, WLC_E_ESCAN_RESULT);
 #endif /* WL_ESCAN */
 #ifdef CSI_SUPPORT
-	setbit(mask, WLC_E_CSI);
+		setbit(mask, WLC_E_CSI);
 #endif /* CSI_SUPPORT */
 #ifdef RTT_SUPPORT
-	setbit(mask, WLC_E_PROXD);
+		setbit(mask, WLC_E_PROXD);
 #endif /* RTT_SUPPORT */
 #ifdef WL_CFG80211
-	setbit(mask, WLC_E_ESCAN_RESULT);
-	setbit(mask, WLC_E_AP_STARTED);
-	setbit(mask, WLC_E_ACTION_FRAME_RX);
-	if (dhd->op_mode & DHD_FLAG_P2P_MODE) {
-		setbit(mask, WLC_E_P2P_DISC_LISTEN_COMPLETE);
-	}
+		setbit(mask, WLC_E_ESCAN_RESULT);
+		setbit(mask, WLC_E_AP_STARTED);
+		setbit(mask, WLC_E_ACTION_FRAME_RX);
+		if (dhd->op_mode & DHD_FLAG_P2P_MODE) {
+			setbit(mask, WLC_E_P2P_DISC_LISTEN_COMPLETE);
+		}
 #endif /* WL_CFG80211 */
 
 #if defined(SHOW_LOGTRACE) && defined(LOGTRACE_FROM_FILE)
-	if (dhd_logtrace_from_file(dhd)) {
-		setbit(mask, WLC_E_TRACE);
-	} else {
-		clrbit(mask, WLC_E_TRACE);
-	}
+		if (dhd_logtrace_from_file(dhd)) {
+			setbit(mask, WLC_E_TRACE);
+		} else {
+			clrbit(mask, WLC_E_TRACE);
+		}
 #elif defined(SHOW_LOGTRACE)
-	setbit(mask, WLC_E_TRACE);
+		setbit(mask, WLC_E_TRACE);
 #else
-	clrbit(mask, WLC_E_TRACE);
+		clrbit(mask, WLC_E_TRACE);
 #endif /* defined(SHOW_LOGTRACE) && defined(LOGTRACE_FROM_FILE) */
 
-	setbit(mask, WLC_E_CSA_COMPLETE_IND);
+		setbit(mask, WLC_E_CSA_COMPLETE_IND);
 #ifdef DHD_WMF
-	setbit(mask, WLC_E_PSTA_PRIMARY_INTF_IND);
+		setbit(mask, WLC_E_PSTA_PRIMARY_INTF_IND);
 #endif
 #ifdef CUSTOM_EVENT_PM_WAKE
-	setbit(mask, WLC_E_EXCESS_PM_WAKE_EVENT);
+		setbit(mask, WLC_E_EXCESS_PM_WAKE_EVENT);
 #endif	/* CUSTOM_EVENT_PM_WAKE */
 #ifdef DHD_LOSSLESS_ROAMING
-	setbit(mask, WLC_E_ROAM_PREP);
+		setbit(mask, WLC_E_ROAM_PREP);
 #endif
-	/* nan events */
-	setbit(mask, WLC_E_NAN);
+		/* nan events */
+		setbit(mask, WLC_E_NAN);
 #if defined(PCIE_FULL_DONGLE) && defined(DHD_LOSSLESS_ROAMING)
-	dhd_update_flow_prio_map(dhd, DHD_FLOW_PRIO_LLR_MAP);
+		dhd_update_flow_prio_map(dhd, DHD_FLOW_PRIO_LLR_MAP);
 #endif /* defined(PCIE_FULL_DONGLE) && defined(DHD_LOSSLESS_ROAMING) */
 
 #if defined(BCMPCIE) && defined(EAPOL_PKT_PRIO)
-	dhd_update_flow_prio_map(dhd, DHD_FLOW_PRIO_LLR_MAP);
+		dhd_update_flow_prio_map(dhd, DHD_FLOW_PRIO_LLR_MAP);
 #endif /* defined(BCMPCIE) && defined(EAPOL_PKT_PRIO) */
 
 #if defined(BCMSDIO) && defined(DHD_LOSSLESS_ROAMING)
-	dhd_update_sdio_data_prio_map(dhd);
+		dhd_update_sdio_data_prio_map(dhd);
 #endif /* BCMSDIO && DHD_LOSSLESS_ROAMING */
 
 #ifdef RSSI_MONITOR_SUPPORT
-	setbit(mask, WLC_E_RSSI_LQM);
+		setbit(mask, WLC_E_RSSI_LQM);
 #endif /* RSSI_MONITOR_SUPPORT */
 #ifdef GSCAN_SUPPORT
-	setbit(mask, WLC_E_PFN_GSCAN_FULL_RESULT);
-	setbit(mask, WLC_E_PFN_SCAN_COMPLETE);
-	setbit(mask, WLC_E_PFN_SSID_EXT);
-	setbit(mask, WLC_E_ROAM_EXP_EVENT);
+		setbit(mask, WLC_E_PFN_GSCAN_FULL_RESULT);
+		setbit(mask, WLC_E_PFN_SCAN_COMPLETE);
+		setbit(mask, WLC_E_PFN_SSID_EXT);
+		setbit(mask, WLC_E_ROAM_EXP_EVENT);
 #endif /* GSCAN_SUPPORT */
-	setbit(mask, WLC_E_RSSI_LQM);
+		setbit(mask, WLC_E_RSSI_LQM);
 #ifdef DBG_PKT_MON
-	setbit(mask, WLC_E_ROAM_PREP);
+		setbit(mask, WLC_E_ROAM_PREP);
 #endif /* DBG_PKT_MON */
 #ifdef BCM_ROUTER_DHD
-	setbit(mask, WLC_E_DPSTA_INTF_IND);
+		setbit(mask, WLC_E_DPSTA_INTF_IND);
 #endif /* BCM_ROUTER_DHD */
-	setbit(mask, WLC_E_SLOTTED_BSS_PEER_OP);
+		setbit(mask, WLC_E_SLOTTED_BSS_PEER_OP);
 #ifdef WL_BCNRECV
-	setbit(mask, WLC_E_BCNRECV_ABORTED);
+		setbit(mask, WLC_E_BCNRECV_ABORTED);
 #endif /* WL_BCNRECV */
 #ifdef WL_MBO
-	setbit(mask, WLC_E_MBO);
+		setbit(mask, WLC_E_MBO);
 #endif /* WL_MBO */
 #ifdef WL_CAC_TS
-	setbit(mask, WLC_E_ADDTS_IND);
-	setbit(mask, WLC_E_DELTS_IND);
+		setbit(mask, WLC_E_ADDTS_IND);
+		setbit(mask, WLC_E_DELTS_IND);
 #endif /* WL_BCNRECV */
-	setbit(mask, WLC_E_COUNTRY_CODE_CHANGED);
+		setbit(mask, WLC_E_COUNTRY_CODE_CHANGED);
 
-	/* Write updated Event mask */
-	eventmask_msg->ver = EVENTMSGS_VER;
-	eventmask_msg->command = EVENTMSGS_SET_MASK;
-	eventmask_msg->len = WL_EVENTING_MASK_EXT_LEN;
-	ret = dhd_iovar(dhd, 0, "event_msgs_ext", (char *)eventmask_msg, msglen, NULL, 0,
-			TRUE);
-	if (ret < 0) {
-		DHD_ERROR(("%s write event mask ext failed %d\n", __FUNCTION__, ret));
+		/* Write updated Event mask */
+		eventmask_msg->ver = EVENTMSGS_VER;
+		eventmask_msg->command = EVENTMSGS_SET_MASK;
+		eventmask_msg->len = WL_EVENTING_MASK_EXT_LEN;
+		ret = dhd_iovar(dhd, 0, "event_msgs_ext", (char *)eventmask_msg, msglen, NULL, 0,
+				TRUE);
+		if (ret < 0) {
+			DHD_ERROR(("%s write event mask ext failed %d\n", __FUNCTION__, ret));
+			goto done;
+		}
+	} else if (ret2 == BCME_UNSUPPORTED || ret2 == BCME_VERSION) {
+		/* Skip for BCME_UNSUPPORTED or BCME_VERSION */
+		DHD_ERROR(("%s event_msgs_ext not support or version mismatch %d\n",
+			__FUNCTION__, ret2));
+	} else {
+		DHD_ERROR(("%s read event mask ext failed %d\n", __FUNCTION__, ret2));
+		ret = ret2;
 		goto done;
 	}
 
