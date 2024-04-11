@@ -560,6 +560,11 @@ bcmdhd_sdio:
 	$(CROSS_COMPILE)strip --strip-unneeded ${OUT_DIR}/$(M)/dhd.ko
 	mv dhd.ko dhd_sdio.ko
 
+bcmdhd_pcie:
+	$(warning "building BCMDHD_PCIE..........")
+	$(MAKE) -C $(KERNEL_SRC) M=$(M) CONFIG_DHD_USE_STATIC_BUF=y modules
+	$(CROSS_COMPILE)strip --strip-unneeded ${OUT_DIR}/$(M)/dhdpci.ko
+
 bcmdhd_usb:
 	$(warning "building BCMDHD_USB..........")
 	$(MAKE) -C $(KDIR) M=$(PWD) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) modules CONFIG_BCMDHD_USB=y
