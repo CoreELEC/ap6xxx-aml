@@ -534,6 +534,10 @@ bcmdhd_sdio:
 	$(MAKE) -C $(KERNEL_SRC) M=$(M) CONFIG_DHD_USE_STATIC_BUF=y modules
 	mv dhd.ko dhd_sdio.ko
 
+bcmdhd_pcie:
+	$(warning "building BCMDHD_PCIE..........")
+	$(MAKE) -C $(KERNEL_SRC) M=$(M) CONFIG_DHD_USE_STATIC_BUF=y modules
+
 bcmdhd_usb:
 	$(warning "building BCMDHD_USB..........")
 	$(MAKE) -C $(KDIR) M=$(PWD) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) modules CONFIG_BCMDHD_USB=y
