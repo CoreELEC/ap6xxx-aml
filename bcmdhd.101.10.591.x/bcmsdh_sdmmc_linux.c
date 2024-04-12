@@ -193,7 +193,9 @@ static void bcmsdh_sdmmc_remove(struct sdio_func *func)
 
 /* devices we support, null terminated */
 static const struct sdio_device_id bcmsdh_sdmmc_ids[] = {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 119))
 	{ SDIO_DEVICE(SDIO_VENDOR_ID_BROADCOM, SDIO_DEVICE_ID_BROADCOM_DEFAULT) },
+#endif
 	/* XXX This should not be in the external release, as it will attach to any SDIO
 	 * device, even non-WLAN devices.
 	 * Need to add IDs for the FALCON-based chips and put this under BCMINTERNAL
@@ -217,7 +219,9 @@ static const struct sdio_device_id bcmsdh_sdmmc_ids[] = {
 	{ SDIO_DEVICE(SDIO_VENDOR_ID_BROADCOM, BCM4381_CHIP_ID) },
 	{ SDIO_DEVICE(SDIO_VENDOR_ID_BROADCOM, BCM4382_CHIP_ID) },
 	{ SDIO_DEVICE(SDIO_VENDOR_ID_BROADCOM, BCM43455_D11AC_V2_ID) },
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 119))
 	{ SDIO_DEVICE(SDIO_VENDOR_ID_BROADCOM, SDIO_ANY_ID) },
+#endif
 	{ 0, 0, 0, 0 /* end: all zeroes */
 	},
 };
