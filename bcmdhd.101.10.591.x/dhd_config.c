@@ -170,8 +170,8 @@ const module_name_map_v2_t module_name_map_v2[] = {
 	{BCM4381_CHIP_ID,	0,	""},
 	{BCM4381_CHIP_ID,	1,	""},
 	{BCM43752_CHIP_ID,	4,	""},
-	{BCM43756_CHIP_ID,	4,	""},
-	{BCM43756_CHIP_ID,	6,	""},
+	{BCM43756_CHIP_ID,	4,	"ap6276p"},
+	{BCM43756_CHIP_ID,	6,	"ap6276p"},
 	{BCM4382_CHIP_ID,	3,	""},
 #endif
 #ifdef BCMDBUS
