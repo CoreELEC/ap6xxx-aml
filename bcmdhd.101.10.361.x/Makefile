@@ -397,8 +397,18 @@ endif
 ifeq ($(CONFIG_BCMDHD_REQUEST_FW),y)
 	DHDCFLAGS += -DDHD_LINUX_STD_FW_API
 #	DHDCFLAGS += -DDHD_REQUEST_FW_PATH
+ifeq ($(CONFIG_BCMDHD_SDIO),y)
+	DHDCFLAGS += -DDHD_FW_NAME="\"/usr/lib/firmware/brcm/\""
+	DHDCFLAGS += -DDHD_NVRAM_NAME="\"/usr/lib/firmware/brcm/\""
+else
+ifeq ($(CONFIG_BCMDHD_PCIE),y)
+	DHDCFLAGS += -DDHD_FW_NAME="\"/usr/lib/firmware/brcm/pcie/\""
+	DHDCFLAGS += -DDHD_NVRAM_NAME="\"/usr/lib/firmware/brcm/pcie/\""
+else
 	DHDCFLAGS += -DDHD_FW_NAME="\"fw_bcmdhd.bin\""
 	DHDCFLAGS += -DDHD_NVRAM_NAME="\"nvram.txt\""
+endif
+endif
 	DHDCFLAGS += -DDHD_CLM_NAME="\"clm_bcmdhd.blob\""
 else
 	DHDCFLAGS += -DDHD_SUPPORT_VFS_CALL
