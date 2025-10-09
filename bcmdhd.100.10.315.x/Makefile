@@ -88,6 +88,8 @@ endif
 else
 	DHDCFLAGS += -DSDIO_ISR_THREAD
 endif
+DHDCFLAGS += -DDHD_FW_NAME="\"/usr/lib/firmware/brcm/\""
+DHDCFLAGS += -DDHD_NVRAM_NAME="\"/usr/lib/firmware/brcm/\""
 DHDOFILES += bcmsdh.o bcmsdh_linux.o bcmsdh_sdmmc.o bcmsdh_sdmmc_linux.o  \
 	dhd_sdio.o dhd_cdc.o dhd_wlfc.o
 endif
