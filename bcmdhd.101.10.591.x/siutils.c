@@ -47,6 +47,7 @@
 #include <bcmutils.h>
 #include <siutils.h>
 #include <bcmdevs.h>
+#include <bcmdevs_legacy.h>
 #include <hndsoc.h>
 #include <sbchipc.h>
 #include <sbgci.h>
@@ -2620,6 +2621,11 @@ si_chipid_fixup(si_t *sih)
 			sii->chipnew = sih->chip; /* save it */
 			sii->pub.chip = BCM4362_CHIP_ID; /* chip class */
 		break;
+		case BCM4356_CHIP_ID:
+		case BCM4371_CHIP_ID:
+			sii->chipnew = sih->chip; /* save it */
+			sii->pub.chip = BCM4354_CHIP_ID; /* chip class */
+			break;
 		default:
 		break;
 	}

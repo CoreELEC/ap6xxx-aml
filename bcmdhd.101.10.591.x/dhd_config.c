@@ -109,6 +109,7 @@ const chip_name_map_t chip_name_map[] = {
 	{BCM4345_CHIP_ID,	9,	"bcm43456c5_ag",	"ap6256"},
 	{BCM4354_CHIP_ID,	1,	"bcm4354a1_ag",		""},
 	{BCM4354_CHIP_ID,	2,	"bcm4356a2_ag",		"ap6356"},
+	{BCM4356_CHIP_ID,	2,	"bcm4356a2_ag",		""},
 	{BCM4359_CHIP_ID,	9,	"bcm4359c0_ag",		"ap6398s"},
 	{BCM43752_CHIP_ID,	2,	"bcm43752a2_ag",	"ap6275s"},
 #endif
@@ -226,7 +227,7 @@ dhd_conf_legacy_chip_check(dhd_pub_t *dhd)
 	uint chip = dhd->conf->chip;
 
 	if (chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
-			chip == BCM4359_CHIP_ID ||
+			chip == BCM4356_CHIP_ID || chip == BCM4359_CHIP_ID ||
 			chip == BCM43569_CHIP_ID) {
 		return true;
 	}
@@ -240,7 +241,7 @@ dhd_conf_new_chip_check(dhd_pub_t *dhd)
 	uint chip = dhd->conf->chip;
 
 	if (chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
-			chip == BCM43569_CHIP_ID) {
+			chip == BCM4356_CHIP_ID || chip == BCM43569_CHIP_ID) {
 		return false;
 	}
 
@@ -268,7 +269,7 @@ dhd_conf_disable_slpauto(dhd_pub_t *dhd)
 	uint chip = dhd->conf->chip;
 
 	if (chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
-			chip == BCM4359_CHIP_ID) {
+			chip == BCM4356_CHIP_ID || chip == BCM4359_CHIP_ID) {
 		dhd_slpauto = FALSE;
 	}
 	CONFIG_MSG("dhd_slpauto = %d\n", dhd_slpauto);
@@ -531,7 +532,7 @@ dhd_conf_legacy_otp_chip(dhd_pub_t *dhd)
 
 	if (chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
 			chip == BCM4359_CHIP_ID || chip == BCM43012_CHIP_ID ||
-			chip == BCM43752_CHIP_ID ||
+			chip == BCM4356_CHIP_ID || chip == BCM43752_CHIP_ID ||
 			chip == BCM43756_CHIP_ID || chip == BCM43711_CHIP_ID) {
 		return true;
 	}
@@ -548,7 +549,7 @@ dhd_conf_legacy_msi_chip(dhd_pub_t *dhd)
 
 	chip = dhd->conf->chip;
 
-	if (chip == BCM4359_CHIP_ID) {
+	if (chip == BCM4356_CHIP_ID || chip == BCM4359_CHIP_ID) {
 		return true;
 	}
 
@@ -4916,7 +4917,7 @@ dhd_conf_set_ampdu_mpdu(dhd_pub_t *dhd)
 
 	if (chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
 			chip == BCM4359_CHIP_ID || chip == BCM43012_CHIP_ID ||
-			chip == BCM4382_CHIP_ID) {
+			chip == BCM4356_CHIP_ID || chip == BCM4382_CHIP_ID) {
 		val = 16;
 	} else if (chip == BCM43752_CHIP_ID || chip == BCM43756_CHIP_ID ||
 			chip == BCM4381_CHIP_ID) {
@@ -4937,7 +4938,7 @@ dhd_conf_set_intr_extn(dhd_pub_t *dhd)
 
 	if (chip == BCM43012_CHIP_ID ||
 			chip == BCM4345_CHIP_ID ||
-			chip == BCM4359_CHIP_ID ||
+			chip == BCM4356_CHIP_ID || chip == BCM4359_CHIP_ID ||
 			chip == BCM43752_CHIP_ID ||
 			chip == BCM4375_CHIP_ID || chip == BCM43756_CHIP_ID ||
 			chip == BCM43711_CHIP_ID ||
@@ -4954,7 +4955,7 @@ dhd_conf_set_txbf(dhd_pub_t *dhd)
 {
 	uint chip = dhd->conf->chip;
 
-	if (chip == BCM4359_CHIP_ID ||
+	if (chip == BCM4356_CHIP_ID || chip == BCM4359_CHIP_ID ||
 			chip == BCM43569_CHIP_ID ||
 			chip == BCM43752_CHIP_ID ||
 			chip == BCM4375_CHIP_ID ||
@@ -4975,7 +4976,7 @@ dhd_conf_tput_improve(dhd_pub_t *dhd)
 	if ((chip == BCM43430_CHIP_ID && chiprev == 2) ||
 			chip == BCM43012_CHIP_ID ||
 			chip == BCM4345_CHIP_ID ||
-			chip == BCM4359_CHIP_ID ||
+			chip == BCM4356_CHIP_ID || chip == BCM4359_CHIP_ID ||
 			chip == BCM43752_CHIP_ID ||
 			chip == BCM4375_CHIP_ID ||
 			chip == BCM43711_CHIP_ID || chip == BCM43756_CHIP_ID ||
@@ -5241,7 +5242,7 @@ dhd_conf_preinit(dhd_pub_t *dhd)
 	memset(&conf->bw_cap, -1, sizeof(conf->bw_cap));
 	conf->mapsta_mode = 0;
 	if (conf->chip == BCM4345_CHIP_ID || conf->chip == BCM4359_CHIP_ID ||
-			conf->chip == BCM43569_CHIP_ID ||
+			conf->chip == BCM4356_CHIP_ID || conf->chip == BCM43569_CHIP_ID ||
 			conf->chip == BCM4375_CHIP_ID) {
 		strcpy(conf->cspec.country_abbrev, "CN");
 		strcpy(conf->cspec.ccode, "CN");
