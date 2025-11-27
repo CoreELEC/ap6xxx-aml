@@ -103,6 +103,7 @@
 
 /* Chip IDs */
 #define BCM43018_CHIP_ID	43018		/* 43018 chipcommon chipid */
+#define BCM4334_CHIP_ID		0x4334		/* 4334 chipcommon chipid */
 #define BCM4335_CHIP_ID		0x4335		/* 4335 chipcommon chipid */
 #define BCM4339_CHIP_ID		0x4339		/* 4339 chipcommon chipid */
 #define BCM43430_CHIP_ID	43430		/* 43430 chipcommon chipid */

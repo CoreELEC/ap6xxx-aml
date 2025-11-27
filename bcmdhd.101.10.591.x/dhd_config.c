@@ -100,6 +100,7 @@ typedef struct chip_name_map_t {
 const chip_name_map_t chip_name_map[] = {
 	/* ChipID			Chiprev	ChipName		ModuleName  */
 #ifdef BCMSDIO
+	{BCM4334_CHIP_ID,	3,	"bcm4334b1_ag",		""},
 	{BCM4339_CHIP_ID,	1,	"bcm4339a0_ag",		"ap6335"},
 	{BCM43430_CHIP_ID,	0,	"bcm43438a0",		"ap6212"},
 	{BCM43430_CHIP_ID,	1,	"bcm43438a1",		"ap6212a"},
@@ -228,7 +229,7 @@ dhd_conf_legacy_chip_check(dhd_pub_t *dhd)
 
 	if (chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
 			chip == BCM4356_CHIP_ID || chip == BCM4359_CHIP_ID ||
-			chip == BCM43569_CHIP_ID) {
+			chip == BCM43569_CHIP_ID || chip == BCM4334_CHIP_ID) {
 		return true;
 	}
 
@@ -241,7 +242,8 @@ dhd_conf_new_chip_check(dhd_pub_t *dhd)
 	uint chip = dhd->conf->chip;
 
 	if (chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
-			chip == BCM4356_CHIP_ID || chip == BCM43569_CHIP_ID) {
+			chip == BCM4356_CHIP_ID || chip == BCM43569_CHIP_ID ||
+			chip == BCM4334_CHIP_ID) {
 		return false;
 	}
 
@@ -254,7 +256,8 @@ dhd_conf_extsae_chip(dhd_pub_t *dhd)
 	uint chip = dhd->conf->chip;
 
 	if (chip == BCM43569_CHIP_ID || chip == BCM4354_CHIP_ID ||
-			chip == BCM4359_CHIP_ID || chip == BCM4339_CHIP_ID) {
+			chip == BCM4359_CHIP_ID || chip == BCM4339_CHIP_ID ||
+			chip == BCM4334_CHIP_ID) {
 		return false;
 	}
 
@@ -269,7 +272,8 @@ dhd_conf_disable_slpauto(dhd_pub_t *dhd)
 	uint chip = dhd->conf->chip;
 
 	if (chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
-			chip == BCM4356_CHIP_ID || chip == BCM4359_CHIP_ID) {
+			chip == BCM4356_CHIP_ID || chip == BCM4359_CHIP_ID ||
+			chip == BCM4334_CHIP_ID) {
 		dhd_slpauto = FALSE;
 	}
 	CONFIG_MSG("dhd_slpauto = %d\n", dhd_slpauto);
@@ -533,7 +537,8 @@ dhd_conf_legacy_otp_chip(dhd_pub_t *dhd)
 	if (chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
 			chip == BCM4359_CHIP_ID || chip == BCM43012_CHIP_ID ||
 			chip == BCM4356_CHIP_ID || chip == BCM43752_CHIP_ID ||
-			chip == BCM43756_CHIP_ID || chip == BCM43711_CHIP_ID) {
+			chip == BCM43756_CHIP_ID || chip == BCM43711_CHIP_ID ||
+			chip == BCM4334_CHIP_ID) {
 		return true;
 	}
 
@@ -3274,6 +3279,8 @@ dhd_conf_get_disable_proptx(dhd_pub_t *dhd)
 	  */
 	if (FW_SUPPORTED(dhd, proptxstatus)) {
 		fw_proptx = 1;
+	} else if (conf->chip == BCM4334_CHIP_ID) {
+		fw_proptx = 1;
 	} else {
 		fw_proptx = 0;
 	}
@@ -4917,7 +4924,8 @@ dhd_conf_set_ampdu_mpdu(dhd_pub_t *dhd)
 
 	if (chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
 			chip == BCM4359_CHIP_ID || chip == BCM43012_CHIP_ID ||
-			chip == BCM4356_CHIP_ID || chip == BCM4382_CHIP_ID) {
+			chip == BCM4356_CHIP_ID || chip == BCM4382_CHIP_ID ||
+			chip == BCM4334_CHIP_ID) {
 		val = 16;
 	} else if (chip == BCM43752_CHIP_ID || chip == BCM43756_CHIP_ID ||
 			chip == BCM4381_CHIP_ID) {
@@ -5299,9 +5307,17 @@ dhd_conf_preinit(dhd_pub_t *dhd)
 #ifdef BCMSDIO
 	conf->use_rxchain = 0;
 	conf->bus_rxglom = TRUE;
-	conf->txglom_ext = FALSE;
+	if (conf->chip == BCM4334_CHIP_ID) {
+		conf->txglom_ext = TRUE;
+	} else {
+		conf->txglom_ext = FALSE;
+	}
 	conf->tx_max_offset = 0;
 	conf->txglomsize = SDPCM_DEFGLOM_SIZE;
+	if (conf->chip == BCM4334_CHIP_ID) {
+		conf->txglom_bucket_size = 1684; // fixed value, don't change
+		conf->txglomsize = 16;
+	}
 	conf->txctl_tmo_fix = 300;
 	conf->txglom_mode = SDPCM_TXGLOM_CPY;
 	conf->deferred_tx_len = 0;
