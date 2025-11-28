@@ -891,4 +891,11 @@ int kernel_read_compat(struct file *file, loff_t offset, char *addr, unsigned lo
 #define kernel_read_compat(file, offset, addr, count) kernel_read(file, offset, addr, count)
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0) */
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 2) || \
+	defined(CFG80211_BKPORT_MLO)
+#define	WDEV_CLIENT(wdev, field)	(wdev->u.client.field)
+#else
+#define	WDEV_CLIENT(wdev, field)	(wdev->field)
+#endif /* LINUX_VER >= 5.19.2 || CFG80211_BKPORT_MLO */
+
 #endif /* _linuxver_h_ */
