@@ -15245,8 +15245,8 @@ wl_handle_roam_exp_event(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgdev,
 			ndev = cfgdev_to_wlc_ndev(cfgdev, cfg);
 			if (ndev) {
 				wdev = ndev->ieee80211_ptr;
-				wdev->ssid_len = min(ssid->SSID_len, (uint32)DOT11_MAX_SSID_LEN);
-				memcpy(wdev->ssid, ssid->SSID, wdev->ssid_len);
+				WDEV_CLIENT(wdev, ssid_len) = min(ssid->SSID_len, (uint32)DOT11_MAX_SSID_LEN);
+				memcpy(WDEV_CLIENT(wdev, ssid), ssid->SSID, WDEV_CLIENT(wdev, ssid_len));
 				WL_ERR(("SSID is %s\n", ssid->SSID));
 				wl_update_prof(cfg, ndev, NULL, ssid, WL_PROF_SSID);
 			} else {
@@ -19184,7 +19184,7 @@ static s32 __wl_cfg80211_down(struct bcm_cfg80211 *cfg)
 			struct wiphy *wiphy = bcmcfg_to_wiphy(cfg);
 			struct wireless_dev *wdev = ndev->ieee80211_ptr;
 			struct cfg80211_bss *bss = CFG80211_GET_BSS(wiphy, NULL, latest_bssid,
-				wdev->ssid, wdev->ssid_len);
+				WDEV_CLIENT(wdev, ssid), WDEV_CLIENT(wdev, ssid_len));
 
 			BCM_REFERENCE(bss);
 
