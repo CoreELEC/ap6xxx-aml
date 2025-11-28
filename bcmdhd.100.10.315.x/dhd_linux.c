@@ -8105,13 +8105,16 @@ dhd_init_logstrs_array(osl_t *osh, dhd_event_log_t *temp)
 {
 	struct file *filep = NULL;
 	struct kstat stat;
+#ifdef get_fs
 	mm_segment_t fs;
+#endif
 	char *raw_fmts =  NULL;
 	int logstrs_size = 0;
 	int error = 0;
-
+#ifdef get_fs
 	fs = get_fs();
 	set_fs(KERNEL_DS);
+#endif
 
 	filep = filp_open(logstrs_path, O_RDONLY, 0);
 
@@ -8158,8 +8161,9 @@ fail:
 fail1:
 	if (!IS_ERR(filep))
 		filp_close(filep, NULL);
-
+#ifdef get_fs
 	set_fs(fs);
+#endif
 	temp->fmts = NULL;
 	return BCME_ERROR;
 }
@@ -8169,16 +8173,19 @@ dhd_read_map(osl_t *osh, char *fname, uint32 *ramstart, uint32 *rodata_start,
 		uint32 *rodata_end)
 {
 	struct file *filep = NULL;
+#ifdef get_fs
 	mm_segment_t fs;
+#endif
 	int err = BCME_ERROR;
 
 	if (fname == NULL) {
 		DHD_ERROR(("%s: ERROR fname is NULL \n", __FUNCTION__));
 		return BCME_ERROR;
 	}
-
+#ifdef get_fs
 	fs = get_fs();
 	set_fs(KERNEL_DS);
+#endif
 
 	filep = filp_open(fname, O_RDONLY, 0);
 	if (IS_ERR(filep)) {
@@ -8193,8 +8200,9 @@ dhd_read_map(osl_t *osh, char *fname, uint32 *ramstart, uint32 *rodata_start,
 fail:
 	if (!IS_ERR(filep))
 		filp_close(filep, NULL);
-
+#ifdef get_fs
 	set_fs(fs);
+#endif
 
 	return err;
 }
@@ -8203,7 +8211,9 @@ static int
 dhd_init_static_strs_array(osl_t *osh, dhd_event_log_t *temp, char *str_file, char *map_file)
 {
 	struct file *filep = NULL;
+#ifdef get_fs
 	mm_segment_t fs;
+#endif
 	char *raw_fmts =  NULL;
 	uint32 logstrs_size = 0;
 	int error = 0;
@@ -15554,11 +15564,16 @@ int write_file(const char * file_name, uint32 flags, uint8 *buf, int size)
 {
 	int ret = 0;
 	struct file *fp = NULL;
+#ifdef get_fs
 	mm_segment_t old_fs;
+#endif
 	loff_t pos = 0;
+
+#ifdef get_fs
 	/* change to KERNEL_DS address limit */
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
+#endif
 
 	/* open file to write */
 	fp = filp_open(file_name, flags, 0664);
@@ -15587,8 +15602,10 @@ exit:
 	if (!IS_ERR(fp))
 		filp_close(fp, current->files);
 
+#ifdef get_fs
 	/* restore previous address limit */
 	set_fs(old_fs);
+#endif
 
 	return ret;
 }
@@ -18361,7 +18378,9 @@ do_dhd_log_dump(dhd_pub_t *dhdp, log_dump_type_t *type)
 {
 	int ret = 0, i = 0;
 	struct file *fp = NULL;
+#ifdef get_fs
 	mm_segment_t old_fs;
+#endif
 	loff_t pos = 0;
 	char dump_path[128];
 	uint32 file_mode;
@@ -18387,9 +18406,11 @@ do_dhd_log_dump(dhd_pub_t *dhdp, log_dump_type_t *type)
 	if ((ret = dhd_log_flush(dhdp, type)) < 0) {
 		goto exit1;
 	}
+#ifdef get_fs
 	/* change to KERNEL_DS address limit */
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
+#endif
 
 	dhd_get_debug_dump_file_name(NULL, dhdp, dump_path, sizeof(dump_path));
 
@@ -18581,7 +18602,9 @@ exit2:
 		DHD_ERROR(("%s: Finished writing log dump to file - '%s' \n",
 				__FUNCTION__, dump_path));
 	}
+#ifdef get_fs
 	set_fs(old_fs);
+#endif
 exit1:
 	if (type) {
 		MFREE(dhdp->osh, type, sizeof(*type));
@@ -20019,12 +20042,16 @@ int
 dhd_write_file(const char *filepath, char *buf, int buf_len)
 {
 	struct file *fp = NULL;
+#ifdef get_fs
 	mm_segment_t old_fs;
+#endif
 	int ret = 0;
 
+#ifdef get_fs
 	/* change to KERNEL_DS address limit */
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
+#endif
 
 	/* File is always created. */
 	fp = filp_open(filepath, O_RDWR | O_CREAT, 0664);
@@ -20046,8 +20073,10 @@ dhd_write_file(const char *filepath, char *buf, int buf_len)
 		filp_close(fp, NULL);
 	}
 
+#ifdef get_fs
 	/* restore previous address limit */
 	set_fs(old_fs);
+#endif
 
 	return ret;
 }
@@ -20056,16 +20085,22 @@ int
 dhd_read_file(const char *filepath, char *buf, int buf_len)
 {
 	struct file *fp = NULL;
+#ifdef get_fs
 	mm_segment_t old_fs;
+#endif
 	int ret;
 
+#ifdef get_fs
 	/* change to KERNEL_DS address limit */
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
+#endif
 
 	fp = filp_open(filepath, O_RDONLY, 0);
 	if (IS_ERR(fp)) {
+#ifdef get_fs
 		set_fs(old_fs);
+#endif
 		DHD_ERROR(("%s: File %s doesn't exist\n", __FUNCTION__, filepath));
 		return BCME_ERROR;
 	}
@@ -20073,8 +20108,10 @@ dhd_read_file(const char *filepath, char *buf, int buf_len)
 	ret = compat_kernel_read(fp, 0, buf, buf_len);
 	filp_close(fp, NULL);
 
+#ifdef get_fs
 	/* restore previous address limit */
 	set_fs(old_fs);
+#endif
 
 	/* Return the number of bytes read */
 	if (ret > 0) {
