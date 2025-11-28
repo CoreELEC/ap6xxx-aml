@@ -76,6 +76,8 @@
 #include <linux/slab.h>
 #endif // endif
 
+#define CFG80211_BKPORT_MLO
+
 #include <linux/types.h>
 #include <linux/init.h>
 #include <linux/mm.h>
