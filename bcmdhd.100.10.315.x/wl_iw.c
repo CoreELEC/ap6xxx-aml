@@ -283,7 +283,9 @@ dev_wlc_ioctl(
 {
 	struct ifreq ifr;
 	wl_ioctl_t ioc;
+#ifdef get_fs
 	mm_segment_t fs;
+#endif
 	int ret;
 
 	memset(&ioc, 0, sizeof(ioc));
@@ -298,15 +300,18 @@ dev_wlc_ioctl(
 	strncpy(ifr.ifr_name, dev->name, sizeof(ifr.ifr_name));
 	ifr.ifr_name[sizeof(ifr.ifr_name) - 1] = '\0';
 	ifr.ifr_data = (caddr_t) &ioc;
-
+#ifdef get_fs
 	fs = get_fs();
 	set_fs(get_ds());
+#endif
 #if defined(WL_USE_NETDEV_OPS)
 	ret = dev->netdev_ops->ndo_do_ioctl(dev, &ifr, SIOCDEVPRIVATE);
 #else
 	ret = dev->do_ioctl(dev, &ifr, SIOCDEVPRIVATE);
 #endif
+#ifdef get_fs
 	set_fs(fs);
+#endif
 
 	return ret;
 }
