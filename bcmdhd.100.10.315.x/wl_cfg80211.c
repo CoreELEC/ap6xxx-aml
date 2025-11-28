@@ -9848,13 +9848,10 @@ exit:
 	return err;
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 8, 0))
 static void
 wl_cfg80211_mgmt_frame_register(struct wiphy *wiphy, bcm_struct_cfgdev *cfgdev,
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 8, 0))
 	u16 frame, bool reg)
-#else
-	struct mgmt_frame_regs *upd)
-#endif
 {
 
 	WL_DBG(("frame_type: %x, reg: %d\n", frame, reg));
@@ -9864,6 +9861,7 @@ wl_cfg80211_mgmt_frame_register(struct wiphy *wiphy, bcm_struct_cfgdev *cfgdev,
 
 	return;
 }
+#endif
 
 static s32
 wl_cfg80211_change_bss(struct wiphy *wiphy,
