@@ -23669,14 +23669,14 @@ wl_cfg80211_sup_event_handler(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgde
 	    reason == WLC_E_SUP_OTHER) {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
 		/* NL80211_CMD_PORT_AUTHORIZED supported above >= 4.15 */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0)) || defined(ANDROID_GKI_UPDATE) || \
-	((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)) && defined(CUSTOMER_HW4)) || \
-	((ANDROID_VERSION == 13) && (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 123))) || \
-	((ANDROID_VERSION >= 14) && (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 109)))
-		cfg80211_port_authorized(ndev, (const u8 *)curbssid, NULL, 0, GFP_KERNEL);
-#else
-		cfg80211_port_authorized(ndev, (const u8 *)curbssid, GFP_KERNEL);
-#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0) */
+	#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0)) || defined(ANDROID_GKI_UPDATE) || \
+		((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)) && defined(CUSTOMER_HW4)) || \
+		((ANDROID_VERSION == 13) && (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 123))) || \
+		((ANDROID_VERSION >= 14) && (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 109)))
+			cfg80211_port_authorized(ndev, (u8 *)wl_read_prof(cfg, ndev, WL_PROF_BSSID), NULL, 0, GFP_KERNEL);
+	#else
+			cfg80211_port_authorized(ndev, (u8 *)wl_read_prof(cfg, ndev, WL_PROF_BSSID), GFP_KERNEL);
+	#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(6, 2, 0) */
 		WL_INFORM_MEM(("4way HS finished. port authorized event sent\n"));
 #elif ((LINUX_VERSION_CODE > KERNEL_VERSION(3, 14, 0)) || \
 	defined(WL_VENDOR_EXT_SUPPORT))
