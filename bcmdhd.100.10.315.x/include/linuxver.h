@@ -382,6 +382,12 @@ extern void timer_cb_compat(struct timer_list *tl);
 
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0) */
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
+#define rtc_time_to_tm(a, b) rtc_time64_to_tm(a, b)
+#else
+#define rtc_time_to_tm(a, b) rtc_time_to_tm(a, b)
+#endif /* LINUX_VER >= 3.19.0 */
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 3, 43))
 
 #define dev_kfree_skb_any(a)		dev_kfree_skb(a)
