@@ -9850,7 +9850,11 @@ exit:
 
 static void
 wl_cfg80211_mgmt_frame_register(struct wiphy *wiphy, bcm_struct_cfgdev *cfgdev,
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 8, 0))
 	u16 frame, bool reg)
+#else
+	struct mgmt_frame_regs *upd)
+#endif
 {
 
 	WL_DBG(("frame_type: %x, reg: %d\n", frame, reg));
@@ -12843,7 +12847,9 @@ static struct cfg80211_ops wl_cfg80211_ops = {
 	.remain_on_channel = wl_cfg80211_remain_on_channel,
 	.cancel_remain_on_channel = wl_cfg80211_cancel_remain_on_channel,
 	.mgmt_tx = wl_cfg80211_mgmt_tx,
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 8, 0))
 	.mgmt_frame_register = wl_cfg80211_mgmt_frame_register,
+#endif
 	.change_bss = wl_cfg80211_change_bss,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 6, 0)) || defined(WL_COMPAT_WIRELESS)
 	.set_channel = wl_cfg80211_set_channel,
