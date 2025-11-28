@@ -6882,7 +6882,11 @@ static void wl_cfg80211_disconnect_state_sync(struct bcm_cfg80211 *cfg, struct n
 
 	wdev = dev->ieee80211_ptr;
 	wait_cnt = WAIT_FOR_DISCONNECT_STATE_SYNC;
-	while ((wdev->current_bss) && wait_cnt) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 2) || defined(CFG80211_BKPORT_MLO)
+		while ((wdev->connected) && wait_cnt) {
+#else
+		while ((wdev->current_bss) && wait_cnt) {
+#endif /* LINUX_VER >= 5.19 || CFG80211_BKPORT_MLO */
 		WL_DBG(("Waiting for disconnect sync, wait_cnt: %d\n", wait_cnt));
 		wait_cnt--;
 		OSL_SLEEP(50);
@@ -6890,7 +6894,7 @@ static void wl_cfg80211_disconnect_state_sync(struct bcm_cfg80211 *cfg, struct n
 
 	if (wait_cnt == 0) {
 		/* state didn't get cleared within given timeout */
-		WL_INFORM_MEM(("cfg80211 state. wdev->current_bss non null\n"));
+		WL_INFORM_MEM(("cfg80211 state. wdev->connected non null\n"));
 	} else {
 		WL_MEM(("cfg80211 disconnect state sync done\n"));
 	}
