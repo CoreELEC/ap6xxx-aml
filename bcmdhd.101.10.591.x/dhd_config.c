@@ -5133,6 +5133,14 @@ dhd_conf_postinit_ioctls(dhd_pub_t *dhd)
 		char he_cmd[] = "110=1, nmode=1, vhtmode=1, he=enab 1";
 		dhd_conf_set_wl_cmd(dhd, he_cmd, TRUE);
 	}
+	if (conf->chip == BCM43752_CHIP_ID && conf->chiprev == 2) {
+		/* AP6275S: HE-capable but needs explicit enable + FW >=
+		 * 18.35.387.23.217 (stock 18.35.387.11 is VHT-only).
+		 * No-op on older firmware. Confirmed on RockTek G2/Nokia 8010.
+		 */
+		char he_cmd[] = "he=enab 1, he=features 1";
+		dhd_conf_set_wl_cmd(dhd, he_cmd, TRUE);
+	}
 	if (conf->chip == BCM43752_CHIP_ID || conf->chip == BCM4359_CHIP_ID) {
 		char txack_alive[] = "txack_alive=0";
 		dhd_conf_set_wl_cmd(dhd, txack_alive, TRUE);
