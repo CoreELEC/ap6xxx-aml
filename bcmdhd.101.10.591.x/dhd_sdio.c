@@ -1032,6 +1032,8 @@ dhdsdio_sr_cap(dhd_bus_t *bus)
 	if (
 		0) {
 			core_capext = FALSE;
+	} else if (bus->sih->chip == BCM4330_CHIP_ID) {
+		core_capext = FALSE;
 	} else if ((bus->sih->chip == BCM4335_CHIP_ID) ||
 		(bus->sih->chip == BCM4339_CHIP_ID) ||
 		BCM4345_CHIP(bus->sih->chip) ||
@@ -9486,6 +9488,8 @@ dhd_dump_cis(uint fn, uint8 *cis)
 static bool
 dhdsdio_chipmatch(uint16 chipid)
 {
+	if (chipid == BCM4330_CHIP_ID)
+		return TRUE;
 	if (chipid == BCM4335_CHIP_ID)
 		return TRUE;
 	if (chipid == BCM4339_CHIP_ID)

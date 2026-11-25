@@ -6938,11 +6938,24 @@ wl_config_assoc_params(struct bcm_cfg80211 *cfg, struct net_device *dev,
 	void *params, u32 buf_len, wlcfg_assoc_info_t *info)
 {
 	s32 ret;
+	u32 i;
+	chanspec_t *chanspec_list;
 
 	if (!cfg->join_iovar_ver) {
 		ret = wl_fillup_assoc_params_v0(cfg, dev, params, buf_len, info);
 	} else {
 		ret = wl_fillup_assoc_params_v1(cfg, dev, params, buf_len, info);
+	}
+	if (ret == BCME_OK && ioctl_version == 1) {
+		if (!cfg->join_iovar_ver)
+			chanspec_list = ((wl_extjoin_params_t *)params)->assoc.chanspec_list;
+		else
+			chanspec_list = ((wl_extjoin_params_v1_t *)params)->assoc.chanspec_list;
+		for (i = 0; i < info->chan_cnt; i++) {
+			chanspec_list[i] = wl_chspec_host_to_driver(chanspec_list[i]);
+			if (chanspec_list[i] == INVCHANSPEC)
+				return -EINVAL;
+		}
 	}
 	return ret;
 }
@@ -7384,6 +7397,7 @@ wl_handle_reassoc(struct bcm_cfg80211 *cfg, struct net_device *dev,
 	s32 err = BCME_OK;
 	size_t reassoc_params_size;
 	u32 chan_cnt = info->chan_cnt;
+	u32 i;
 	chanspec_t *chanspecs = info->chanspecs;
 #ifdef WL_EXT_IAPSTA
 	u32 chanspec = info->chanspecs[0];
@@ -7411,6 +7425,16 @@ wl_handle_reassoc(struct bcm_cfg80211 *cfg, struct net_device *dev,
 	(void)memcpy_s(&reassoc_params->bssid.octet, ETH_ALEN, info->bssid, ETH_ALEN);
 	(void)memcpy_s(reassoc_params->chanspec_list, (sizeof(chanspec_t) * chan_cnt),
 		chanspecs, sizeof(chanspec_t) * chan_cnt);
+	if (ioctl_version == 1) {
+		for (i = 0; i < chan_cnt; i++) {
+			reassoc_params->chanspec_list[i] =
+				wl_chspec_host_to_driver(reassoc_params->chanspec_list[i]);
+			if (reassoc_params->chanspec_list[i] == INVCHANSPEC) {
+				err = -EINVAL;
+				goto fail;
+			}
+		}
+	}
 	reassoc_params->chanspec_num = htod32(chan_cnt);
 
 #ifdef WL_EXT_IAPSTA
@@ -12215,12 +12239,17 @@ wl_cfg80211_get_channel(struct wiphy *wiphy, struct wireless_dev *wdev,
 		return -EINVAL;
 	}
 
-	if ((ret = wldev_iovar_getint(wdev->netdev, "chanspec", (s32 *)&chanspec) != BCME_OK)) {
+	if ((ret = wldev_iovar_getint(wdev->netdev, "chanspec",
+			(s32 *)&chanspec)) != BCME_OK) {
 		return ret;
 	}
+	if (ioctl_version == 1)
+		chanspec = wl_chspec_driver_to_host(chanspec);
 	if (!chandef || (wl_chspec_chandef(chanspec, chandef, wiphy) != BCME_OK)) {
 		return BCME_ERROR;
 	}
+	if (!cfg80211_chandef_valid(chandef))
+		return -EINVAL;
 	return 0;
 }
 #endif /* !DISABLE_CFG_GET_CHANNEL && LINUX_VERSION_CODE >= KERNEL_VERSION (3, 8, 0) */
@@ -16203,12 +16232,17 @@ static s32 wl_update_bss_info(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 		ie_len = bi->ie_length;
 		beacon_interval = cpu_to_le16(bi->beacon_period);
 	} else {
-		u16 channel;
+		struct ieee80211_channel *channel;
 		WL_INFORM_MEM(("Found AP in the cache - BSSID " MACDBG "\n",
 			MAC2STRDBG(bss->bssid)));
-		channel = wf_chspec_ctlchan(wl_chspec_driver_to_host(bi->chanspec));
-		freq = wl_channel_to_frequency(channel, CHSPEC_BAND(bi->chanspec));
-		bss->channel = ieee80211_get_channel(wiphy, freq);
+		freq = wl_channel_to_frequency(wf_chspec_ctlchan(chspec), CHSPEC_BAND(chspec));
+		channel = ieee80211_get_channel(wiphy, freq);
+		if (!channel || bss->channel != channel) {
+			WL_ERR(("Invalid or inconsistent cached BSS channel\n"));
+			CFG80211_PUT_BSS(wiphy, bss);
+			err = BCME_BADCHAN;
+			goto update_bss_info_out;
+		}
 #if defined(WL_CFG80211_P2P_DEV_IF)
 		ie = (const u8 *)bss->ies->data;
 		ie_len = bss->ies->len;
@@ -21470,6 +21504,8 @@ s32 wl_cfg80211_up(struct net_device *net)
 		return BCME_VERSION;
 	}
 	ioctl_version = val;
+	if (dhd_conf_get_chip(cfg->pub) == BCM4330_CHIP_ID)
+		WL_MSG(net->name, "BCM4330 firmware ioctl version %d\n", ioctl_version);
 	WL_TRACE(("WLC_GET_VERSION=%d\n", ioctl_version));
 #ifdef WL_EXT_IAPSTA
 	wl_ext_in4way_sync(net, STA_NO_BTC_IN4WAY, WL_EXT_STATUS_DISCONNECTED, NULL);
