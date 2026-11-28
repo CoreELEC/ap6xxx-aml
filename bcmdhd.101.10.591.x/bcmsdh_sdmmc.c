@@ -663,12 +663,14 @@ sdioh_attach(osl_t *osh, struct sdio_func *func)
 
 	sdio_claim_host(sd->func[2]);
 	sd->client_block_size[2] = sd_f2_blocksize;
-	printf("%s: set sd_f2_blocksize %d\n", __FUNCTION__, sd_f2_blocksize);
-	err_ret = sdio_set_block_size(sd->func[2], sd_f2_blocksize);
+	if (func->device == BCM4330_CHIP_ID && sd->client_block_size[2] > 128)
+		sd->client_block_size[2] = 128;
+	printf("%s: set sd_f2_blocksize %d\n", __FUNCTION__, sd->client_block_size[2]);
+	err_ret = sdio_set_block_size(sd->func[2], sd->client_block_size[2]);
 	sdio_release_host(sd->func[2]);
 	if (err_ret) {
 		sd_err(("bcmsdh_sdmmc: Failed to set F2 blocksize to %d(%d)\n",
-			sd_f2_blocksize, err_ret));
+			sd->client_block_size[2], err_ret));
 		goto fail;
 	}
 
@@ -2235,11 +2237,16 @@ sdioh_start(sdioh_info_t *sd, int stage)
 					sdio_claim_host(sd->func[2]);
 
 					sd->client_block_size[2] = sd_f2_blocksize;
-					printf("%s: set sd_f2_blocksize %d\n", __FUNCTION__, sd_f2_blocksize);
-					ret = sdio_set_block_size(sd->func[2], sd_f2_blocksize);
+					if (sd->func[2]->device == BCM4330_CHIP_ID &&
+							sd->client_block_size[2] > 128)
+						sd->client_block_size[2] = 128;
+					printf("%s: set sd_f2_blocksize %d\n",
+						__FUNCTION__, sd->client_block_size[2]);
+					ret = sdio_set_block_size(sd->func[2],
+						sd->client_block_size[2]);
 					if (ret) {
 						sd_err(("bcmsdh_sdmmc: Failed to set F2 blocksize"
-							" to %d(%d)\n", sd_f2_blocksize, ret));
+							" to %d(%d)\n", sd->client_block_size[2], ret));
 					}
 
 					/* Release host controller F2 */

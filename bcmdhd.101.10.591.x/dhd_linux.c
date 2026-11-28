@@ -11720,6 +11720,8 @@ static int
 dhd_legacy_preinit_ioctls(dhd_pub_t *dhd)
 {
 	int ret = 0;
+	bool legacy_event_mask = FALSE;
+	int legacy_ret;
 	/*  Room for "event_msgs_ext" + '\0' + bitvec  */
 	char iovbuf[WL_EVENTING_MASK_EXT_LEN + EVENTMSGS_EXT_STRUCT_SIZE + 16];
 	char *mask;
@@ -12859,9 +12861,22 @@ dhd_legacy_preinit_ioctls(dhd_pub_t *dhd)
 	ret2 = dhd_iovar(dhd, 0, "event_msgs_ext", (char *)eventmask_msg, msglen, iov_buf,
 			WLC_IOCTL_SMLEN, FALSE);
 
-	/* event_msgs_ext must be supported */
-	if (ret2 == BCME_OK) {
-		bcopy(iov_buf, eventmask_msg, msglen);
+	/* Older firmware only supports the legacy event_msgs iovar */
+	if (ret2 == BCME_UNSUPPORTED || ret2 == BCME_VERSION) {
+		legacy_ret = dhd_iovar(dhd, 0, "event_msgs", NULL, 0,
+			eventmask_msg->mask, WL_EVENTING_MASK_LEN, FALSE);
+		if (legacy_ret < 0) {
+			DHD_ERROR(("%s read legacy event mask failed %d\n",
+				__FUNCTION__, legacy_ret));
+		} else {
+			legacy_event_mask = TRUE;
+		}
+	}
+
+	/* Update the mask with event_msgs_ext or the legacy event_msgs */
+	if (ret2 == BCME_OK || legacy_event_mask) {
+		if (!legacy_event_mask)
+			bcopy(iov_buf, eventmask_msg, msglen);
 		/* make up event mask ext message iovar for event larger than 128 */
 		mask = eventmask_msg->mask;
 
@@ -13007,13 +13022,18 @@ dhd_legacy_preinit_ioctls(dhd_pub_t *dhd)
 
 		setbit(mask, WLC_E_FIFO_CREDIT_MAP);
 		/* Write updated Event mask */
-		eventmask_msg->ver = EVENTMSGS_VER;
-		eventmask_msg->command = EVENTMSGS_SET_MASK;
-		eventmask_msg->len = WL_EVENTING_MASK_EXT_LEN;
-		ret = dhd_iovar(dhd, 0, "event_msgs_ext", (char *)eventmask_msg, msglen, NULL, 0,
-				TRUE);
+		if (legacy_event_mask) {
+			ret = dhd_iovar(dhd, 0, "event_msgs", mask,
+				WL_EVENTING_MASK_LEN, NULL, 0, TRUE);
+		} else {
+			eventmask_msg->ver = EVENTMSGS_VER;
+			eventmask_msg->command = EVENTMSGS_SET_MASK;
+			eventmask_msg->len = WL_EVENTING_MASK_EXT_LEN;
+			ret = dhd_iovar(dhd, 0, "event_msgs_ext", (char *)eventmask_msg,
+				msglen, NULL, 0, TRUE);
+		}
 		if (ret < 0) {
-			DHD_ERROR(("%s write event mask ext failed %d\n", __FUNCTION__, ret));
+			DHD_ERROR(("%s write event mask failed %d\n", __FUNCTION__, ret));
 			goto done;
 		}
 	} else if (ret2 == BCME_UNSUPPORTED || ret2 == BCME_VERSION) {

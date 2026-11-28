@@ -110,6 +110,7 @@ typedef struct chip_name_map_t {
 const chip_name_map_t chip_name_map[] = {
 	/* ChipID			Chiprev	ChipName		ModuleName */
 #ifdef BCMSDIO
+	{BCM4330_CHIP_ID,	4,	"bcm40183b2",		""},
 	{BCM4339_CHIP_ID,	1,	"bcm4339a0_ag",		"ap6335"},
 	{BCM43430_CHIP_ID,	0,	"bcm43438a0",		"ap6212"},
 	{BCM43430_CHIP_ID,	1,	"bcm43438a1",		"ap6212a"},
@@ -265,7 +266,7 @@ dhd_conf_legacy_chip_check(dhd_pub_t *dhd)
 {
 	uint chip = dhd->conf->chip;
 
-	if (chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
+	if (chip == BCM4330_CHIP_ID || chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
 			chip == BCM4356_CHIP_ID || chip == BCM43569_CHIP_ID ||
 			chip == BCM4359_CHIP_ID) {
 		return true;
@@ -279,7 +280,7 @@ dhd_conf_new_chip_check(dhd_pub_t *dhd)
 {
 	uint chip = dhd->conf->chip;
 
-	if (chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
+	if (chip == BCM4330_CHIP_ID || chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
 			chip == BCM4356_CHIP_ID || chip == BCM43569_CHIP_ID) {
 		return false;
 	}
@@ -292,7 +293,7 @@ dhd_conf_extsae_chip(dhd_pub_t *dhd)
 {
 	uint chip = dhd->conf->chip;
 
-	if (chip == BCM43569_CHIP_ID || chip == BCM4354_CHIP_ID ||
+	if (chip == BCM4330_CHIP_ID || chip == BCM43569_CHIP_ID || chip == BCM4354_CHIP_ID ||
 			chip == BCM4359_CHIP_ID || chip == BCM4339_CHIP_ID) {
 		return false;
 	}
@@ -307,7 +308,7 @@ dhd_conf_disable_slpauto(dhd_pub_t *dhd)
 {
 	uint chip = dhd->conf->chip;
 
-	if (chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
+	if (chip == BCM4330_CHIP_ID || chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
 			chip == BCM4356_CHIP_ID || chip == BCM4359_CHIP_ID) {
 		dhd_slpauto = FALSE;
 	}
@@ -569,7 +570,7 @@ dhd_conf_legacy_otp_chip(dhd_pub_t *dhd)
 
 	chip = dhd->conf->chip;
 
-	if (chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
+	if (chip == BCM4330_CHIP_ID || chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
 			chip == BCM4356_CHIP_ID || chip == BCM4359_CHIP_ID ||
 			chip == BCM43012_CHIP_ID ||
 			chip == BCM43752_CHIP_ID || chip == BCM43756_CHIP_ID ||
@@ -5643,7 +5644,7 @@ dhd_conf_set_ampdu_mpdu(dhd_pub_t *dhd)
 	char ampdu_mpdu[32] = "ampdu_mpdu=";
 	int val = -1;
 
-	if (chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
+	if (chip == BCM4330_CHIP_ID || chip == BCM43430_CHIP_ID || chip == BCM4345_CHIP_ID ||
 			chip == BCM4356_CHIP_ID || chip == BCM4359_CHIP_ID ||
 			chip == BCM43012_CHIP_ID ||
 			chip == BCM4382_CHIP_ID) {

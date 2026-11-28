@@ -395,12 +395,13 @@ s32 wl_inform_single_bss(struct bcm_cfg80211 *cfg, wl_bss_info_v109_t *bi, bool 
 		WL_ERR(("notif_bss_info alloc failed\n"));
 		return -ENOMEM;
 	}
+	chanspec = wl_chspec_driver_to_host(bi->chanspec);
 	/* Check for all currently supported bands */
 	if (!(
 #ifdef WL_6G_BAND
-		CHSPEC_IS6G(bi->chanspec) ||
+		CHSPEC_IS6G(chanspec) ||
 #endif /* WL_6G_BAND */
-		CHSPEC_IS5G(bi->chanspec) || CHSPEC_IS2G(bi->chanspec))) {
+		CHSPEC_IS5G(chanspec) || CHSPEC_IS2G(chanspec))) {
 		WL_ERR(("No valid band"));
 		MFREE(cfg->osh, notif_bss_info, sizeof(*notif_bss_info)
 			+ sizeof(*mgmt) - sizeof(u8) + WL_BSS_INFO_MAX);
@@ -408,9 +409,8 @@ s32 wl_inform_single_bss(struct bcm_cfg80211 *cfg, wl_bss_info_v109_t *bi, bool 
 	}
 
 	mgmt = (struct ieee80211_mgmt *)notif_bss_info->frame_buf;
-	chanspec = wl_chspec_driver_to_host(bi->chanspec);
 	notif_bss_info->channel = wf_chspec_ctlchan(chanspec);
-	notif_bss_info->band = CHSPEC_BAND(bi->chanspec);
+	notif_bss_info->band = CHSPEC_BAND(chanspec);
 	notif_bss_info->rssi = dtoh16(bi->RSSI);
 #if defined(RSSIAVG)
 	notif_bss_info->rssi = wl_get_avg_rssi(&cfg->g_rssi_cache_ctrl, &bi->BSSID);
