@@ -198,6 +198,7 @@
 
 /* Chip IDs */
 
+#define BCM4330_CHIP_ID		0x4330		/* 4330 chipcommon chipid */
 #define BCM43430_CHIP_ID	43430		/* 43430 chipcommon chipid */
 #define BCM43460_CHIP_ID	43460		/* 4360  chipcommon chipid (OTP, RBBU) */
 #define BCM4360_CHIP_ID		0x4360          /* 4360 chipcommon chipid */
